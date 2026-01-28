@@ -1269,6 +1269,13 @@ export default function App() {
           isWaitingForCode={onboarding.isWaitingForCode}
           onSubmitAuthCode={onboarding.handleSubmitAuthCode}
           onCancelOAuth={onboarding.handleCancelOAuth}
+          // Copilot CLI props
+          copilotStatus={onboarding.copilotStatus}
+          onCopilotInstallClick={onboarding.handleCopilotInstallClick}
+          onCopilotAuthenticateClick={onboarding.handleCopilotAuthenticateClick}
+          onCopilotRefreshClick={onboarding.handleCopilotRefreshClick}
+          onCopilotContinue={onboarding.handleCopilotContinue}
+          // Git Bash (Windows)
           onBrowseGitBash={onboarding.handleBrowseGitBash}
           onUseGitBashPath={onboarding.handleUseGitBashPath}
           onRecheckGitBash={onboarding.handleRecheckGitBash}
