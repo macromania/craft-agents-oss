@@ -218,6 +218,18 @@ export interface GitBashStatus {
 }
 
 /**
+ * Copilot CLI status (for provider selection)
+ */
+export interface CopilotStatus {
+  /** Whether the Copilot CLI is installed */
+  installed: boolean;
+  /** Whether the user is authenticated with GitHub */
+  authenticated: boolean;
+  /** Error message if status check failed */
+  error?: string;
+}
+
+/**
  * Result of saving onboarding configuration
  */
 export interface OnboardingSaveResult {
@@ -689,6 +701,15 @@ export const IPC_CHANNELS = {
   GITBASH_BROWSE: "gitbash:browse",
   GITBASH_SET_PATH: "gitbash:setPath",
 
+  // Provider management (Claude / Copilot)
+  GET_PROVIDER: "provider:get",
+  SET_PROVIDER: "provider:set",
+  CHECK_COPILOT_STATUS: "provider:checkCopilotStatus",
+  START_COPILOT_AUTH: "provider:startCopilotAuth",
+
+  // Shell / External
+  OPEN_EXTERNAL: "shell:openExternal",
+
   // Menu actions (renderer → main for window/app control)
   MENU_QUIT: "menu:quit",
   MENU_MINIMIZE: "menu:minimize",
@@ -815,9 +836,11 @@ export interface ElectronAPI {
   hasClaudeOAuthState(): Promise<boolean>;
   clearClaudeOAuthState(): Promise<{ success: boolean }>;
 
-  // GitHub Copilot CLI
-  checkCopilotStatus(): Promise<{ installed: boolean; authenticated: boolean; error?: string }>;
+  // GitHub Copilot CLI / Provider management
+  checkCopilotStatus(): Promise<CopilotStatus>;
   startCopilotAuth(): Promise<{ success: boolean; error?: string }>;
+  getProvider(): Promise<import("@craft-agent/shared/agent/providers/types").ProviderType>;
+  setProvider(provider: import("@craft-agent/shared/agent/providers/types").ProviderType): Promise<void>;
 
   // Shell / External
   openExternal(url: string): Promise<void>;
