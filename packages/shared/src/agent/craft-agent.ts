@@ -52,6 +52,8 @@ import { detectConfigFileType, validateConfigFileContent, formatValidationResult
 import { type ThinkingLevel, getThinkingTokens, DEFAULT_THINKING_LEVEL } from './thinking-levels.ts';
 import type { LoadedSource } from '../sources/types.ts';
 import { sourceNeedsAuthentication } from '../sources/credential-manager.ts';
+// Provider abstraction layer
+import { type ProviderType, getProviderAdapter, type ProviderAdapter } from './providers/index.ts';
 
 // Re-export permission mode functions for application usage
 export {
@@ -65,6 +67,9 @@ export {
   PERMISSION_MODE_CONFIG,
 } from './mode-manager.ts';
 // Documentation is served via local files at ~/.craft-agent/docs/
+
+// Re-export provider types for application usage
+export { type ProviderType } from './providers/index.ts';
 
 // Import and re-export AgentEvent from core (single source of truth)
 import type { AgentEvent } from '@craft-agent/core/types';
@@ -105,6 +110,7 @@ export interface CraftAgentConfig {
   mcpToken?: string;           // Override token (for testing)
   model?: string;
   thinkingLevel?: ThinkingLevel; // Initial thinking level (defaults to 'think')
+  provider?: ProviderType;     // AI provider ('claude' | 'copilot'), defaults to 'claude'
   onSdkSessionIdUpdate?: (sdkSessionId: string) => void;  // Callback when SDK session ID is captured
   onSdkSessionIdCleared?: () => void;  // Callback when SDK session ID is cleared (e.g., after failed resume)
   /**
@@ -358,6 +364,8 @@ export class CraftAgent {
   private pendingPermissions: Map<string, PendingPermission> = new Map();
   private alwaysAllowedCommands: Set<string> = new Set(); // Base commands allowed for this session (e.g., "ls", "cat")
   private alwaysAllowedDomains: Set<string> = new Set(); // Domains allowed for curl/wget (session-scoped)
+  // Provider adapter for SDK abstraction (Claude or Copilot)
+  private providerAdapter: ProviderAdapter;
   // Pre-built source server configs (user-defined sources, separate from agent)
   // Supports both HTTP/SSE and stdio transports
   private sourceMcpServers: Record<string, SdkMcpServerConfig> = {};
@@ -456,6 +464,11 @@ export class CraftAgent {
     const model = config.session?.model ?? config.model ?? DEFAULT_MODEL;
     this.config = { ...config, model };
     this.isHeadless = config.isHeadless ?? false;
+
+    // Initialize provider adapter (default to 'claude' for backwards compatibility)
+    const providerType = config.provider ?? 'claude';
+    this.providerAdapter = getProviderAdapter(providerType);
+    debug(`[CraftAgent] Using provider: ${providerType}`);
 
     // Log which model is being used (helpful for debugging custom models)
     debug(`[CraftAgent] Using model: ${model}`);
@@ -588,6 +601,13 @@ export class CraftAgent {
    */
   getThinkingLevel(): ThinkingLevel {
     return this.thinkingLevel;
+  }
+
+  /**
+   * Get the current provider type.
+   */
+  getProviderType(): ProviderType {
+    return this.providerAdapter.name;
   }
 
   /**

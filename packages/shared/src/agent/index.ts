@@ -60,6 +60,28 @@ export {
   type ModeConfig,
 } from './mode-manager.ts';
 
+// Export provider abstraction layer
+export {
+  // Provider types
+  type ProviderType,
+  type ProviderAdapter,
+  type ProviderQueryConfig,
+  type ProviderQueryResult,
+  type ProviderMessage,
+  type ProviderModelUsage,
+  type ProviderModelDefinition,
+  type SdkMcpServerConfig,
+  type SystemPromptConfig,
+  // Provider factory
+  getProviderAdapter,
+  getAvailableProviders,
+  getDefaultProviderType,
+  isModelSupportedByProvider,
+  // Adapter classes (for direct use if needed)
+  ClaudeAdapter,
+  CopilotAdapter,
+} from './providers/index.ts';
+
 // Export plan types and permission mode messages
 export type { Plan, PlanStep, PlanState, PlanReviewRequest, PlanReviewResult } from './plan-types.ts';
 export { PERMISSION_MODE_MESSAGES, PERMISSION_MODE_PROMPTS } from './plan-types.ts';
