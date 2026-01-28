@@ -840,6 +840,17 @@ export class CraftAgent {
         return;
       }
 
+      // ═══════════════════════════════════════════════════════════════════════════
+      // PROVIDER DISPATCH: Route to provider-specific implementation
+      // ═══════════════════════════════════════════════════════════════════════════
+      // The Claude SDK has extensive integration (hooks, options, MCP, etc.)
+      // Other providers (Copilot) use a simpler subprocess approach.
+      if (this.providerAdapter.name === "copilot") {
+        // Delegate to Copilot-specific implementation
+        yield* this.chatWithCopilot(userMessage, attachments);
+        return;
+      }
+
       // Block SDK tools that require UI we don't have:
       // - EnterPlanMode/ExitPlanMode: We use safe mode instead (user-controlled via UI)
       // - AskUserQuestion: Requires interactive UI to show question options to user
@@ -1980,6 +1991,128 @@ export class CraftAgent {
       // Note: thinkingLevel is NOT reset - it's sticky for the session
       this.ultrathinkOverride = false;
     }
+  }
+
+  /**
+   * Chat implementation for GitHub Copilot provider.
+   *
+   * Uses the Copilot CLI subprocess (`copilot -p "message"`) instead of Claude SDK.
+   * The CLI handles:
+   * - Tool execution (file operations, shell commands)
+   * - Model selection (GPT-5, Claude Sonnet via Copilot, etc.)
+   * - GitHub authentication
+   *
+   * This is a simpler implementation than the Claude SDK path because:
+   * 1. Copilot CLI handles tools internally (no hooks needed)
+   * 2. No session resumption API (conversations are stateless from our perspective)
+   * 3. Output is plain text (no complex event mapping)
+   */
+  private async *chatWithCopilot(userMessage: string, attachments?: FileAttachment[]): AsyncGenerator<AgentEvent> {
+    debug("[chatWithCopilot] Starting Copilot query");
+
+    // Build the prompt with context (similar to Claude path but simpler)
+    const prompt = this.buildTextPrompt(userMessage, attachments);
+
+    // Get model from config
+    const model = this.config.model || "claude-sonnet-4.5"; // Default to Claude Sonnet via Copilot
+
+    try {
+      // Get MCP server config (Copilot can use --additional-mcp-config)
+      const sourceMcpResult = this.getSourceMcpServersFiltered();
+      const mcpServers: Record<string, { type: "http" | "sse"; url: string; headers?: Record<string, string> } | { type: "stdio"; command: string; args?: string[]; env?: Record<string, string> }> = {
+        ...sourceMcpResult.servers,
+      };
+
+      // Create query config
+      const queryConfig = {
+        model,
+        systemPrompt: {
+          type: "preset" as const,
+          preset: "default",
+          append: this.pinnedPreferencesPrompt || undefined,
+        },
+        cwd: this.workspaceRootPath,
+        mcpServers,
+        abortController: new AbortController(),
+        sessionId: this.sessionId || undefined,
+        workspaceRootPath: this.workspaceRootPath,
+      };
+
+      // Store abort controller for potential force-stop
+      this.currentQueryAbortController = queryConfig.abortController;
+
+      // Execute query via provider adapter
+      const result = await this.providerAdapter.query({ content: prompt, attachments }, queryConfig);
+
+      // Process events from the provider
+      let receivedContent = false;
+      for await (const rawEvent of result.events) {
+        // Map provider event to AgentEvent
+        const event = this.providerAdapter.mapEvent(rawEvent);
+
+        if (!event) {
+          // Skip unmapped events
+          continue;
+        }
+
+        // Track if we received any content
+        if (event.type === "text_delta" || event.type === "text_complete") {
+          receivedContent = true;
+        }
+
+        // Yield the mapped event
+        yield event;
+
+        // Check for completion
+        if (event.type === "complete") {
+          break;
+        }
+      }
+
+      // Ensure we emit complete if not already done
+      if (!receivedContent) {
+        yield { type: "info", message: "No response received from Copilot" };
+      }
+    } catch (error) {
+      debug(`[chatWithCopilot] Error: ${error}`);
+
+      const errorMessage = error instanceof Error ? error.message : String(error);
+
+      // Check for common Copilot CLI errors
+      if (errorMessage.includes("not found") || errorMessage.includes("not installed")) {
+        yield {
+          type: "typed_error",
+          error: {
+            code: "service_unavailable" as const,
+            title: "Copilot CLI Not Found",
+            message: "The GitHub Copilot CLI is not installed or not in PATH.",
+            details: ["Install it from: https://github.com/github/copilot-cli", "Or use the Claude provider instead."],
+            actions: [{ key: "s", label: "Check settings", action: "settings" as const }],
+            canRetry: false,
+          },
+        };
+      } else if (errorMessage.includes("authenticated") || errorMessage.includes("auth")) {
+        yield {
+          type: "typed_error",
+          error: {
+            code: "mcp_auth_required" as const,
+            title: "GitHub Authentication Required",
+            message: "Please authenticate with GitHub CLI first.",
+            details: ["Run: gh auth login"],
+            actions: [{ key: "r", label: "Retry", action: "retry" as const }],
+            canRetry: true,
+            retryDelayMs: 5000,
+          },
+        };
+      } else {
+        // Generic error
+        yield { type: "error", message: errorMessage };
+      }
+    } finally {
+      this.currentQueryAbortController = null;
+    }
+
+    yield { type: "complete" };
   }
 
   /**

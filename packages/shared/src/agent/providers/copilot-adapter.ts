@@ -1,146 +1,338 @@
 /**
- * Copilot Provider Adapter (Stub)
+ * Copilot Provider Adapter
  *
- * This adapter wraps the GitHub Copilot SDK (@github/copilot-sdk) for the provider
- * abstraction layer. It enables users to leverage their existing GitHub Copilot
- * subscription as an alternative to the Claude Agent SDK.
+ * This adapter interfaces with the GitHub Copilot CLI (`copilot`) to enable users
+ * to leverage their existing GitHub Copilot subscription as an alternative to
+ * the Claude Agent SDK.
  *
- * NOTE: This is a Phase 1 stub implementation. The actual SDK integration will be
- * completed when the full Copilot SDK API is finalized. The adapter compiles and
- * passes type checks, but query() is not yet fully functional.
+ * Architecture:
+ * - Spawns the `copilot` CLI as a subprocess with `-p` (prompt) flag
+ * - Uses `--stream on` for streaming responses
+ * - Uses `--silent` for clean output without stats
+ * - Uses `--allow-all-tools` for automatic tool execution
+ * - Parses streaming output and converts to AgentEvent format
  *
- * Status: Technical Preview - API may change based on Copilot SDK evolution.
+ * Supported models (via --model flag):
+ * - claude-sonnet-4.5, claude-haiku-4.5, claude-opus-4.5
+ * - gpt-5, gpt-5.2, gpt-4.1
+ * - gemini-3-pro-preview
  */
 
-import { execSync } from "child_process";
+import { spawn, execSync, type ChildProcess } from "child_process";
+import { existsSync, writeFileSync, mkdirSync } from "fs";
+import { join } from "path";
+import { homedir, tmpdir } from "os";
 import type { ProviderAdapter, ProviderMessage, ProviderQueryConfig, ProviderQueryResult } from "./types.ts";
 import type { AgentEvent } from "@craft-agent/core/types";
 import { debug } from "../../utils/debug.ts";
 
-// Copilot SDK types - will be imported from @github/copilot-sdk when available
-// For now, define stub types for compilation
-interface CopilotEvent {
-  type: string;
+/**
+ * Internal event type for Copilot CLI output parsing
+ */
+interface CopilotStreamEvent {
+  type: "text" | "tool_start" | "tool_result" | "error" | "complete" | "thinking";
   content?: string;
   toolName?: string;
   toolUseId?: string;
   input?: Record<string, unknown>;
   result?: string;
   isError?: boolean;
-  message?: string;
 }
 
 /**
- * Copilot SDK adapter implementing the ProviderAdapter interface.
+ * Copilot CLI adapter implementing the ProviderAdapter interface.
  *
- * The Copilot SDK has a similar architecture to the Claude Agent SDK:
- * - JSON-RPC communication with a CLI subprocess
- * - Streaming support
+ * Uses the GitHub Copilot CLI in non-interactive mode (`-p` flag) to execute
+ * queries. The CLI handles:
+ * - Authentication via GitHub CLI credentials
+ * - Model selection
+ * - Tool execution (file read/write, shell commands)
  * - MCP server integration
- * - Tool execution
- *
- * Key differences:
- * - Supports multiple models (GPT-5, GPT-4.1, Claude Sonnet/Haiku via Copilot)
- * - Uses GitHub CLI authentication (not API key)
- * - Different event format (requires mapping to AgentEvent)
  */
 export class CopilotAdapter implements ProviderAdapter {
   readonly name = "copilot" as const;
 
+  // Path to copilot CLI (cached after first lookup)
+  private copilotPath: string | null = null;
+
   /**
-   * Execute a query using the Copilot SDK.
+   * Execute a query using the Copilot CLI subprocess.
    *
-   * NOTE: This is a stub implementation. The actual SDK integration will be
-   * completed when the Copilot SDK API is finalized.
+   * Spawns `copilot -p "message" --model <model> --allow-all-tools --stream on --silent`
+   * and parses the streaming output into AgentEvents.
    */
   async query(message: ProviderMessage, config: ProviderQueryConfig): Promise<ProviderQueryResult> {
-    // Log the attempt for debugging
-    debug("[CopilotAdapter] query() called - stub implementation");
+    debug("[CopilotAdapter] query() called");
     debug(`[CopilotAdapter] model: ${config.model}, message length: ${message.content.length}`);
 
-    // Create abort controller for cancellation
+    // Find copilot CLI path
+    const copilotPath = this.findCopilotCli();
+    if (!copilotPath) {
+      throw new Error("Copilot CLI not found. Please install GitHub Copilot CLI.");
+    }
+
+    // Create abort controller
     const abortController = config.abortController ?? new AbortController();
+    let childProcess: ChildProcess | null = null;
 
-    // TODO: Implement actual Copilot SDK integration
-    // The integration will follow this pattern:
-    //
-    // 1. Initialize CopilotClient if not already done
-    // 2. Create or resume session with model and system prompt
-    // 3. Send message and return event stream
-    //
-    // Example (pseudocode based on expected SDK API):
-    //
-    // import { CopilotClient, CopilotSession } from '@github/copilot-sdk';
-    //
-    // if (!this.client) {
-    //   this.client = new CopilotClient();
-    //   await this.client.start();
-    // }
-    //
-    // const session = config.sessionId
-    //   ? await this.client.resumeSession(config.sessionId)
-    //   : await this.client.createSession({
-    //       model: config.model,
-    //       streaming: true,
-    //       systemMessage: { content: config.systemPrompt.append || '' },
-    //       mcpServers: this.convertMcpServers(config.mcpServers),
-    //     });
-    //
-    // const eventStream = session.sendMessage({
-    //   content: message.content,
-    // });
-    //
-    // return {
-    //   events: eventStream,
-    //   sessionId: session.sessionId,
-    //   abort: () => session.abort(),
-    // };
+    // Build CLI arguments
+    const args = this.buildCliArgs(message, config);
+    debug(`[CopilotAdapter] CLI args: ${args.join(" ")}`);
 
-    // For now, return a stub that yields an error event
-    const stubEvents = this.createStubEventStream();
+    // Create the event stream generator
+    const eventStream = this.createEventStream(copilotPath, args, abortController, (proc) => {
+      childProcess = proc;
+    });
 
     return {
-      events: stubEvents,
-      sessionId: undefined,
-      modelUsage: undefined,
-      abort: () => abortController.abort(),
+      events: eventStream,
+      get sessionId() {
+        return undefined; // Copilot CLI doesn't expose session ID in output
+      },
+      modelUsage: undefined, // Copilot CLI doesn't expose usage in silent mode
+      abort: () => {
+        debug("[CopilotAdapter] Aborting query");
+        abortController.abort();
+        if (childProcess) {
+          childProcess.kill("SIGTERM");
+        }
+      },
     };
   }
 
   /**
-   * Create a stub event stream that yields an informational message.
-   * This is used until the actual Copilot SDK integration is complete.
+   * Find the copilot CLI executable path.
+   * Checks common installation locations.
    */
-  private async *createStubEventStream(): AsyncIterable<CopilotEvent> {
-    yield {
-      type: "assistant.message",
-      content: "Copilot SDK integration is not yet complete. Please use the Claude provider for now.",
+  private findCopilotCli(): string | null {
+    if (this.copilotPath) {
+      return this.copilotPath;
+    }
+
+    // Common paths to check
+    const paths = [
+      // Homebrew (macOS)
+      "/opt/homebrew/bin/copilot",
+      "/usr/local/bin/copilot",
+      // VS Code extension path (macOS)
+      join(homedir(), "Library", "Application Support", "Code", "User", "globalStorage", "github.copilot-chat", "copilotCli", "copilot"),
+      // VS Code Insiders
+      join(homedir(), "Library", "Application Support", "Code - Insiders", "User", "globalStorage", "github.copilot-chat", "copilotCli", "copilot"),
+      // Cursor
+      join(homedir(), "Library", "Application Support", "Cursor", "User", "globalStorage", "github.copilot-chat", "copilotCli", "copilot"),
+      // Linux VS Code
+      join(homedir(), ".config", "Code", "User", "globalStorage", "github.copilot-chat", "copilotCli", "copilot"),
+      // Windows
+      join(homedir(), "AppData", "Roaming", "Code", "User", "globalStorage", "github.copilot-chat", "copilotCli", "copilot.exe"),
+    ];
+
+    for (const path of paths) {
+      if (existsSync(path)) {
+        this.copilotPath = path;
+        debug(`[CopilotAdapter] Found copilot CLI at: ${path}`);
+        return path;
+      }
+    }
+
+    // Try to find in PATH
+    try {
+      const which = process.platform === "win32" ? "where" : "which";
+      const result = execSync(`${which} copilot`, { stdio: "pipe", encoding: "utf-8" }).trim();
+      if (result) {
+        this.copilotPath = result.split("\n")[0] ?? null; // Take first result on Windows
+        debug(`[CopilotAdapter] Found copilot CLI in PATH: ${this.copilotPath}`);
+        return this.copilotPath;
+      }
+    } catch {
+      // Not in PATH
+    }
+
+    debug("[CopilotAdapter] Copilot CLI not found");
+    return null;
+  }
+
+  /**
+   * Build CLI arguments for the copilot command.
+   */
+  private buildCliArgs(message: ProviderMessage, config: ProviderQueryConfig): string[] {
+    const args: string[] = [];
+
+    // Prompt (the user message)
+    args.push("-p", message.content);
+
+    // Model selection
+    args.push("--model", config.model);
+
+    // Enable streaming
+    args.push("--stream", "on");
+
+    // Silent mode (output only response, no stats)
+    args.push("--silent");
+
+    // No color for clean parsing
+    args.push("--no-color");
+
+    // Auto-approve all tools for non-interactive mode
+    args.push("--allow-all-tools");
+    args.push("--allow-all-paths");
+
+    // Set working directory
+    if (config.cwd) {
+      args.push("--add-dir", config.cwd);
+    }
+
+    // Add MCP server config if provided
+    if (config.mcpServers && Object.keys(config.mcpServers).length > 0) {
+      const mcpConfig = this.convertMcpServers(config.mcpServers);
+      if (mcpConfig) {
+        // Write MCP config to temp file and pass via --additional-mcp-config
+        const tempPath = this.writeTempMcpConfig(mcpConfig);
+        args.push("--additional-mcp-config", `@${tempPath}`);
+      }
+    }
+
+    // Resume session if session ID provided
+    if (config.sessionId) {
+      args.push("--resume", config.sessionId);
+    }
+
+    // Disable tools if specified
+    if (config.disallowedTools && config.disallowedTools.length > 0) {
+      for (const tool of config.disallowedTools) {
+        args.push("--deny-tool", tool);
+      }
+    }
+
+    return args;
+  }
+
+  /**
+   * Create an async generator that spawns the copilot CLI and yields events.
+   */
+  private async *createEventStream(copilotPath: string, args: string[], abortController: AbortController, onProcess: (proc: ChildProcess) => void): AsyncIterable<CopilotStreamEvent> {
+    debug(`[CopilotAdapter] Spawning: ${copilotPath} ${args.join(" ")}`);
+
+    const proc = spawn(copilotPath, args, {
+      stdio: ["pipe", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        // Ensure color is disabled
+        NO_COLOR: "1",
+        COPILOT_ALLOW_ALL: "true",
+      },
+    });
+
+    onProcess(proc);
+
+    // Handle abort
+    const abortHandler = () => {
+      debug("[CopilotAdapter] Abort signal received");
+      proc.kill("SIGTERM");
     };
-    yield {
-      type: "session.idle",
-    };
+    abortController.signal.addEventListener("abort", abortHandler);
+
+    // Buffer for incomplete lines
+    let buffer = "";
+
+    // Process stdout
+    proc.stdout?.setEncoding("utf-8");
+
+    // Collect stderr for error reporting
+    let stderrContent = "";
+    proc.stderr?.setEncoding("utf-8");
+    proc.stderr?.on("data", (chunk: string) => {
+      stderrContent += chunk;
+    });
+
+    try {
+      // Create a promise that resolves when process exits
+      const exitPromise = new Promise<number | null>((resolve, reject) => {
+        proc.on("close", resolve);
+        proc.on("error", reject);
+      });
+
+      // Stream stdout data
+      for await (const chunk of proc.stdout as AsyncIterable<string>) {
+        if (abortController.signal.aborted) {
+          break;
+        }
+
+        buffer += chunk;
+
+        // Process complete lines
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || ""; // Keep incomplete line in buffer
+
+        for (const line of lines) {
+          if (line.trim()) {
+            // Each line is text output from the model
+            yield {
+              type: "text",
+              content: line + "\n",
+            };
+          }
+        }
+      }
+
+      // Process any remaining buffer
+      if (buffer.trim()) {
+        yield {
+          type: "text",
+          content: buffer,
+        };
+      }
+
+      // Wait for process to exit
+      const exitCode = await exitPromise;
+      debug(`[CopilotAdapter] Process exited with code: ${exitCode}`);
+
+      // Check for errors
+      if (exitCode !== 0 && stderrContent) {
+        debug(`[CopilotAdapter] stderr: ${stderrContent}`);
+        yield {
+          type: "error",
+          content: stderrContent || `Copilot CLI exited with code ${exitCode}`,
+        };
+      }
+
+      // Signal completion
+      yield { type: "complete" };
+    } finally {
+      abortController.signal.removeEventListener("abort", abortHandler);
+    }
   }
 
   /**
    * Check if Copilot CLI is installed and authenticated.
    *
-   * The Copilot CLI uses GitHub authentication, so we check:
+   * Checks:
    * 1. Is the 'copilot' CLI installed and accessible?
    * 2. Is the user authenticated with GitHub?
    */
   async isAvailable(): Promise<boolean> {
     try {
-      // Check if Copilot CLI is installed
-      execSync("copilot --version", { stdio: "pipe" });
+      const copilotPath = this.findCopilotCli();
+      if (!copilotPath) {
+        debug("[CopilotAdapter] isAvailable: false (CLI not found)");
+        return false;
+      }
 
-      // Check if user is authenticated
-      const authOutput = execSync("copilot auth status", { stdio: "pipe" }).toString();
-      const isAuthenticated = authOutput.toLowerCase().includes("logged in");
+      // Check version to verify CLI is functional
+      execSync(`"${copilotPath}" --version`, { stdio: "pipe", timeout: 10000 });
 
-      debug(`[CopilotAdapter] isAvailable: CLI found, authenticated=${isAuthenticated}`);
-      return isAuthenticated;
+      // Check if user is authenticated via gh CLI
+      // The copilot CLI uses GitHub CLI credentials
+      try {
+        const authOutput = execSync("gh auth status", { stdio: "pipe", encoding: "utf-8", timeout: 10000 });
+        const isAuthenticated = authOutput.toLowerCase().includes("logged in");
+        debug(`[CopilotAdapter] isAvailable: CLI found, gh authenticated=${isAuthenticated}`);
+        return isAuthenticated;
+      } catch {
+        // gh auth status failed - not authenticated
+        debug("[CopilotAdapter] isAvailable: false (gh not authenticated)");
+        return false;
+      }
     } catch (error) {
-      // CLI not installed or not in PATH
       debug(`[CopilotAdapter] isAvailable: false (${error instanceof Error ? error.message : "unknown error"})`);
       return false;
     }
@@ -149,45 +341,51 @@ export class CopilotAdapter implements ProviderAdapter {
   /**
    * Get list of models available through GitHub Copilot.
    *
-   * Copilot provides access to multiple models including:
-   * - OpenAI models (GPT-5, GPT-4.1)
-   * - Anthropic models via Copilot (Claude Sonnet 4.5, Claude Haiku 4.5)
+   * Based on `copilot help config` output:
+   * - claude-sonnet-4.5, claude-haiku-4.5, claude-opus-4.5
+   * - gpt-5, gpt-5.2, gpt-5.1, gpt-4.1
+   * - gemini-3-pro-preview
    */
   getAvailableModels(): string[] {
-    return ["gpt-5", "gpt-4.1", "claude-sonnet-4.5", "claude-haiku-4.5"];
+    return [
+      // Claude models via Copilot
+      "claude-opus-4.5",
+      "claude-sonnet-4.5",
+      "claude-haiku-4.5",
+      // OpenAI models
+      "gpt-5",
+      "gpt-5.2",
+      "gpt-5.1",
+      "gpt-4.1",
+      // Google models
+      "gemini-3-pro-preview",
+    ];
   }
 
   /**
-   * Map Copilot SDK event to AgentEvent.
+   * Map Copilot stream event to AgentEvent.
    *
-   * The Copilot SDK has a different event format that needs to be mapped
-   * to our internal AgentEvent types for consistent UI rendering.
+   * The Copilot CLI outputs plain text, so most events are text_delta.
+   * Tool execution details are embedded in the text output.
    */
   mapEvent(event: unknown): AgentEvent | null {
-    const copilotEvent = event as CopilotEvent;
+    const copilotEvent = event as CopilotStreamEvent;
 
     switch (copilotEvent.type) {
-      case "assistant.message_delta":
+      case "text":
         return {
           type: "text_delta",
           text: copilotEvent.content || "",
         };
 
-      case "assistant.message":
-        return {
-          type: "text_complete",
-          text: copilotEvent.content || "",
-          isIntermediate: false,
-        };
-
-      case "assistant.reasoning":
-        // Map Copilot reasoning to text_delta for thinking display
+      case "thinking":
+        // Map thinking to text_delta (UI handles thinking display)
         return {
           type: "text_delta",
           text: copilotEvent.content || "",
         };
 
-      case "tool.execution_start":
+      case "tool_start":
         return {
           type: "tool_start",
           toolName: copilotEvent.toolName || "unknown",
@@ -195,7 +393,7 @@ export class CopilotAdapter implements ProviderAdapter {
           input: copilotEvent.input || {},
         };
 
-      case "tool.execution_complete":
+      case "tool_result":
         return {
           type: "tool_result",
           toolUseId: copilotEvent.toolUseId || "",
@@ -203,21 +401,19 @@ export class CopilotAdapter implements ProviderAdapter {
           isError: copilotEvent.isError ?? false,
         };
 
-      case "session.error":
+      case "error":
         return {
           type: "error",
-          message: copilotEvent.message || "Unknown Copilot error",
+          message: copilotEvent.content || "Unknown Copilot error",
         };
 
-      case "session.idle":
-        // Completion signal
+      case "complete":
         return {
           type: "complete",
         };
 
       default:
-        // Unknown event type - skip
-        debug(`[CopilotAdapter] Unknown event type: ${copilotEvent.type}`);
+        debug(`[CopilotAdapter] Unknown event type: ${(copilotEvent as CopilotStreamEvent).type}`);
         return null;
     }
   }
@@ -233,12 +429,47 @@ export class CopilotAdapter implements ProviderAdapter {
   }
 
   /**
-   * Convert MCP server config to Copilot SDK format.
-   * TODO: Implement when Copilot SDK API is finalized.
+   * Convert MCP server config to Copilot's expected JSON format.
    */
-  private convertMcpServers(_servers: ProviderQueryConfig["mcpServers"]): unknown {
-    // Copilot SDK may have a different MCP server config format
-    // For now, return as-is (may need transformation later)
-    return _servers;
+  private convertMcpServers(servers: ProviderQueryConfig["mcpServers"]): Record<string, unknown> | null {
+    if (!servers || Object.keys(servers).length === 0) {
+      return null;
+    }
+
+    const mcpConfig: Record<string, unknown> = {};
+
+    for (const [name, server] of Object.entries(servers)) {
+      if (typeof server === "object" && "type" in server) {
+        if (server.type === "http" || server.type === "sse") {
+          mcpConfig[name] = {
+            url: server.url,
+            ...(server.headers ? { headers: server.headers } : {}),
+          };
+        } else if (server.type === "stdio") {
+          mcpConfig[name] = {
+            command: server.command,
+            args: server.args || [],
+            env: server.env || {},
+          };
+        }
+      }
+    }
+
+    return Object.keys(mcpConfig).length > 0 ? mcpConfig : null;
+  }
+
+  /**
+   * Write MCP config to a temporary file and return the path.
+   */
+  private writeTempMcpConfig(config: Record<string, unknown>): string {
+    const tempDir = join(tmpdir(), "craft-agent-copilot");
+    if (!existsSync(tempDir)) {
+      mkdirSync(tempDir, { recursive: true });
+    }
+
+    const tempPath = join(tempDir, `mcp-config-${Date.now()}.json`);
+    writeFileSync(tempPath, JSON.stringify(config, null, 2), "utf-8");
+    debug(`[CopilotAdapter] Wrote MCP config to: ${tempPath}`);
+    return tempPath;
   }
 }
