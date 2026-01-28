@@ -15,15 +15,7 @@
  */
 
 // Context
-export {
-  PlatformProvider,
-  usePlatform,
-  type PlatformActions,
-  type PlatformProviderProps,
-  ShikiThemeProvider,
-  useShikiTheme,
-  type ShikiThemeProviderProps,
-} from './context'
+export { PlatformProvider, usePlatform, type PlatformActions, type PlatformProviderProps, ShikiThemeProvider, useShikiTheme, type ShikiThemeProviderProps } from "./context";
 
 // Chat components
 export {
@@ -47,19 +39,10 @@ export {
   type ActivityItem,
   type ResponseContent,
   type TodoItem,
-} from './components/chat'
+} from "./components/chat";
 
 // Markdown
-export {
-  Markdown,
-  MemoizedMarkdown,
-  CodeBlock,
-  InlineCode,
-  CollapsibleMarkdownProvider,
-  useCollapsibleMarkdown,
-  type MarkdownProps,
-  type RenderMode,
-} from './components/markdown'
+export { Markdown, MemoizedMarkdown, CodeBlock, InlineCode, CollapsibleMarkdownProvider, useCollapsibleMarkdown, type MarkdownProps, type RenderMode } from "./components/markdown";
 
 // UI primitives
 export {
@@ -75,15 +58,10 @@ export {
   type PreviewHeaderProps,
   type PreviewHeaderBadgeProps,
   type PreviewBadgeVariant,
-} from './components/ui'
+} from "./components/ui";
 
 // Tooltip
-export {
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-  TooltipProvider,
-} from './components/tooltip'
+export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./components/tooltip";
 
 // Code viewer components
 export {
@@ -101,21 +79,10 @@ export {
   type ShikiCodeViewerProps,
   type ShikiDiffViewerProps,
   type DiffViewerControlsProps,
-} from './components/code-viewer'
+} from "./components/code-viewer";
 
 // Terminal components
-export {
-  TerminalOutput,
-  parseAnsi,
-  stripAnsi,
-  isGrepContentOutput,
-  parseGrepOutput,
-  ANSI_COLORS,
-  type TerminalOutputProps,
-  type ToolType,
-  type AnsiSpan,
-  type GrepLine,
-} from './components/terminal'
+export { TerminalOutput, parseAnsi, stripAnsi, isGrepContentOutput, parseGrepOutput, ANSI_COLORS, type TerminalOutputProps, type ToolType, type AnsiSpan, type GrepLine } from "./components/terminal";
 
 // Overlay components
 export {
@@ -146,19 +113,13 @@ export {
   type JSONPreviewOverlayProps,
   type DataTableOverlayProps,
   type DocumentFormattedMarkdownOverlayProps,
-} from './components/overlay'
+} from "./components/overlay";
 
 // Utilities
-export { cn } from './lib/utils'
+export { cn } from "./lib/utils";
 
 // Layout constants and hooks
-export {
-  CHAT_LAYOUT,
-  CHAT_CLASSES,
-  OVERLAY_LAYOUT,
-  useOverlayMode,
-  type OverlayMode,
-} from './lib/layout'
+export { CHAT_LAYOUT, CHAT_CLASSES, OVERLAY_LAYOUT, useOverlayMode, type OverlayMode } from "./lib/layout";
 
 // Tool result parsers
 export {
@@ -176,15 +137,13 @@ export {
   type GenericOverlayData,
   type JSONOverlayData,
   type OverlayData,
-} from './lib/tool-parsers'
+} from "./lib/tool-parsers";
 
 // Turn utilities (pure functions)
-export * from './components/chat/turn-utils'
+export * from "./components/chat/turn-utils";
 
 // Icons
-export {
-  Icon_Folder,
-  Icon_Home,
-  Icon_Inbox,
-  type IconProps,
-} from './components/icons'
+export { Icon_Folder, Icon_Home, Icon_Inbox, type IconProps } from "./components/icons";
+
+// Copilot components
+export { CopilotSetupStep, type CopilotSetupStepProps, type CopilotStatus } from "./components/copilot";

@@ -1,38 +1,44 @@
-import { cn } from "@/lib/utils"
-import { Check, CreditCard, Key } from "lucide-react"
-import { StepFormLayout, BackButton, ContinueButton } from "./primitives"
+import { cn } from "@/lib/utils";
+import { Check, CreditCard, Key, Github } from "lucide-react";
+import { StepFormLayout, BackButton, ContinueButton } from "./primitives";
 
-export type ApiSetupMethod = 'api_key' | 'claude_oauth'
+export type ApiSetupMethod = "api_key" | "claude_oauth" | "copilot_cli";
 
 interface ApiSetupOption {
-  id: ApiSetupMethod
-  name: string
-  description: string
-  icon: React.ReactNode
-  recommended?: boolean
+  id: ApiSetupMethod;
+  name: string;
+  description: string;
+  icon: React.ReactNode;
+  recommended?: boolean;
 }
 
 const API_SETUP_OPTIONS: ApiSetupOption[] = [
   {
-    id: 'claude_oauth',
-    name: 'Claude Pro/Max',
-    description: 'Use your Claude subscription for unlimited access.',
-    icon: <CreditCard className="size-4" />,
+    id: "copilot_cli",
+    name: "GitHub Copilot",
+    description: "Use your existing GitHub Copilot subscription.",
+    icon: <Github className="size-4" />,
     recommended: true,
   },
   {
-    id: 'api_key',
-    name: 'API Key',
-    description: 'Anthropic, OpenRouter, Ollama, or compatible APIs.',
+    id: "claude_oauth",
+    name: "Claude Pro/Max",
+    description: "Use your Claude subscription for unlimited access.",
+    icon: <CreditCard className="size-4" />,
+  },
+  {
+    id: "api_key",
+    name: "API Key",
+    description: "Anthropic, OpenRouter, Ollama, or compatible APIs.",
     icon: <Key className="size-4" />,
   },
-]
+];
 
 interface APISetupStepProps {
-  selectedMethod: ApiSetupMethod | null
-  onSelect: (method: ApiSetupMethod) => void
-  onContinue: () => void
-  onBack: () => void
+  selectedMethod: ApiSetupMethod | null;
+  onSelect: (method: ApiSetupMethod) => void;
+  onContinue: () => void;
+  onBack: () => void;
 }
 
 /**
@@ -42,12 +48,7 @@ interface APISetupStepProps {
  * - Claude Pro/Max (recommended) - Uses Claude subscription
  * - API Key - Pay-as-you-go via Anthropic
  */
-export function APISetupStep({
-  selectedMethod,
-  onSelect,
-  onContinue,
-  onBack
-}: APISetupStepProps) {
+export function APISetupStep({ selectedMethod, onSelect, onContinue, onBack }: APISetupStepProps) {
   return (
     <StepFormLayout
       title="Set Up API Connection"
@@ -62,7 +63,7 @@ export function APISetupStep({
       {/* Options */}
       <div className="space-y-3">
         {API_SETUP_OPTIONS.map((option) => {
-          const isSelected = option.id === selectedMethod
+          const isSelected = option.id === selectedMethod;
 
           return (
             <button
@@ -72,51 +73,29 @@ export function APISetupStep({
                 "flex w-full items-start gap-4 rounded-xl p-4 text-left transition-all",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 "hover:bg-foreground/[0.02] shadow-minimal",
-                isSelected
-                  ? "bg-background"
-                  : "bg-foreground-2"
+                isSelected ? "bg-background" : "bg-foreground-2"
               )}
             >
               {/* Icon */}
-              <div
-                className={cn(
-                  "flex size-10 shrink-0 items-center justify-center rounded-lg",
-                  isSelected ? "bg-foreground/10 text-foreground" : "bg-muted text-muted-foreground"
-                )}
-              >
-                {option.icon}
-              </div>
+              <div className={cn("flex size-10 shrink-0 items-center justify-center rounded-lg", isSelected ? "bg-foreground/10 text-foreground" : "bg-muted text-muted-foreground")}>{option.icon}</div>
 
               {/* Content */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-sm">{option.name}</span>
-                  {option.recommended && (
-                    <span className="rounded-[4px] bg-background shadow-minimal px-2 py-0.5 text-[11px] font-medium text-foreground/70">
-                      Recommended
-                    </span>
-                  )}
+                  {option.recommended && <span className="rounded-[4px] bg-background shadow-minimal px-2 py-0.5 text-[11px] font-medium text-foreground/70">Recommended</span>}
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {option.description}
-                </p>
+                <p className="mt-1 text-xs text-muted-foreground">{option.description}</p>
               </div>
 
               {/* Check */}
-              <div
-                className={cn(
-                  "flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
-                  isSelected
-                    ? "border-foreground bg-foreground text-background"
-                    : "border-muted-foreground/20"
-                )}
-              >
+              <div className={cn("flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors", isSelected ? "border-foreground bg-foreground text-background" : "border-muted-foreground/20")}>
                 {isSelected && <Check className="size-3" strokeWidth={3} />}
               </div>
             </button>
-          )
+          );
         })}
       </div>
     </StepFormLayout>
-  )
+  );
 }
