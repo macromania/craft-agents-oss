@@ -18,26 +18,19 @@
 /** Types of credentials we store */
 export type CredentialType =
   // Global credentials
-  | 'anthropic_api_key'  // Anthropic API key for Claude
-  | 'claude_oauth'       // Claude OAuth token (Max subscription)
+  | "anthropic_api_key" // Anthropic API key for Claude
+  | "claude_oauth" // Claude OAuth token (Max subscription)
+  | "copilot_cli" // GitHub Copilot CLI auth status (not stored, checked at runtime)
   // Workspace credentials
-  | 'workspace_oauth'    // Workspace MCP OAuth token
+  | "workspace_oauth" // Workspace MCP OAuth token
   // Source credentials (stored at ~/.craft-agent/workspaces/{ws}/sources/{slug}/)
-  | 'source_oauth'       // OAuth tokens for MCP/API sources
-  | 'source_bearer'      // Bearer tokens
-  | 'source_apikey'      // API keys
-  | 'source_basic';      // Basic auth (base64 encoded user:pass)
+  | "source_oauth" // OAuth tokens for MCP/API sources
+  | "source_bearer" // Bearer tokens
+  | "source_apikey" // API keys
+  | "source_basic"; // Basic auth (base64 encoded user:pass)
 
 /** Valid credential types for validation */
-const VALID_CREDENTIAL_TYPES: readonly CredentialType[] = [
-  'anthropic_api_key',
-  'claude_oauth',
-  'workspace_oauth',
-  'source_oauth',
-  'source_bearer',
-  'source_apikey',
-  'source_basic',
-] as const;
+const VALID_CREDENTIAL_TYPES: readonly CredentialType[] = ["anthropic_api_key", "claude_oauth", "copilot_cli", "workspace_oauth", "source_oauth", "source_bearer", "source_apikey", "source_basic"] as const;
 
 /** Check if a string is a valid CredentialType */
 function isValidCredentialType(type: string): type is CredentialType {
@@ -79,20 +72,15 @@ export interface StoredCredential {
   /** Token type (e.g., "Bearer") */
   tokenType?: string;
   /** Where the credential came from: 'native' (our OAuth), 'cli' (Claude CLI import) */
-  source?: 'native' | 'cli';
+  source?: "native" | "cli";
 }
 
 // Using "::" as delimiter instead of "/" because server names and API names
 // could contain "/" (e.g., URLs like "https://api.example.com")
-const CREDENTIAL_DELIMITER = '::';
+const CREDENTIAL_DELIMITER = "::";
 
 /** Source credential types */
-const SOURCE_CREDENTIAL_TYPES = [
-  'source_oauth',
-  'source_bearer',
-  'source_apikey',
-  'source_basic',
-] as const;
+const SOURCE_CREDENTIAL_TYPES = ["source_oauth", "source_bearer", "source_apikey", "source_basic"] as const;
 
 /** Check if type is a source credential */
 function isSourceCredential(type: CredentialType): boolean {
@@ -105,7 +93,7 @@ export function credentialIdToAccount(id: CredentialId): string {
 
   // Workspace-scoped format (no source):
   // workspace_oauth::{workspaceId}
-  if (id.type === 'workspace_oauth' && id.workspaceId) {
+  if (id.type === "workspace_oauth" && id.workspaceId) {
     parts.push(id.workspaceId);
     return parts.join(CREDENTIAL_DELIMITER);
   }
@@ -118,7 +106,7 @@ export function credentialIdToAccount(id: CredentialId): string {
     return parts.join(CREDENTIAL_DELIMITER);
   }
 
-  parts.push('global');
+  parts.push("global");
   return parts.join(CREDENTIAL_DELIMITER);
 }
 
@@ -136,7 +124,7 @@ export function accountToCredentialId(account: string): CredentialId | null {
 
   // Workspace-scoped format (no source):
   // workspace_oauth::{workspaceId}
-  if (type === 'workspace_oauth' && parts.length === 2) {
+  if (type === "workspace_oauth" && parts.length === 2) {
     return { type, workspaceId: parts[1] };
   }
 
@@ -146,7 +134,7 @@ export function accountToCredentialId(account: string): CredentialId | null {
     return { type, workspaceId: parts[1], sourceId: parts[2] };
   }
 
-  if (parts.length === 2 && parts[1] === 'global') {
+  if (parts.length === 2 && parts[1] === "global") {
     return { type };
   }
 

@@ -3,21 +3,10 @@
  */
 
 // Workspace and config types
-export type {
-  Workspace,
-  McpAuthType,
-  AuthType,
-  OAuthCredentials,
-  StoredConfig,
-} from './workspace.ts';
+export type { Workspace, McpAuthType, AuthType, OAuthCredentials, StoredConfig } from "./workspace.ts";
 
 // Session types
-export type {
-  Session,
-  StoredSession,
-  SessionMetadata,
-  SessionStatus,
-} from './session.ts';
+export type { Session, StoredSession, SessionMetadata, SessionStatus, SessionProviderType } from "./session.ts";
 
 // Message types
 export type {
@@ -40,6 +29,5 @@ export type {
   CredentialInputMode,
   AuthRequestType,
   AuthStatus,
-} from './message.ts';
-export { generateMessageId } from './message.ts';
-
+} from "./message.ts";
+export { generateMessageId } from "./message.ts";

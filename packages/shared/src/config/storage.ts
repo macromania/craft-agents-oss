@@ -1,55 +1,46 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, statSync } from 'fs';
-import { join, dirname } from 'path';
-import { getCredentialManager } from '../credentials/index.ts';
-import { getOrCreateLatestSession, type SessionConfig } from '../sessions/index.ts';
-import {
-  discoverWorkspacesInDefaultLocation,
-  loadWorkspaceConfig,
-  createWorkspaceAtPath,
-  isValidWorkspace,
-} from '../workspaces/storage.ts';
-import { findIconFile } from '../utils/icon.ts';
-import { initializeDocs } from '../docs/index.ts';
-import { expandPath, toPortablePath } from '../utils/paths.ts';
-import { CONFIG_DIR } from './paths.ts';
-import type { StoredAttachment, StoredMessage } from '@craft-agent/core/types';
-import type { Plan } from '../agent/plan-types.ts';
-import type { PermissionMode } from '../agent/mode-manager.ts';
-import { BUNDLED_CONFIG_DEFAULTS, type ConfigDefaults } from './config-defaults-schema.ts';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, statSync } from "fs";
+import { join, dirname } from "path";
+import { getCredentialManager } from "../credentials/index.ts";
+import { getOrCreateLatestSession, type SessionConfig } from "../sessions/index.ts";
+import { discoverWorkspacesInDefaultLocation, loadWorkspaceConfig, createWorkspaceAtPath, isValidWorkspace } from "../workspaces/storage.ts";
+import { findIconFile } from "../utils/icon.ts";
+import { initializeDocs } from "../docs/index.ts";
+import { expandPath, toPortablePath } from "../utils/paths.ts";
+import { CONFIG_DIR } from "./paths.ts";
+import type { StoredAttachment, StoredMessage } from "@craft-agent/core/types";
+import type { Plan } from "../agent/plan-types.ts";
+import type { PermissionMode } from "../agent/mode-manager.ts";
+import { BUNDLED_CONFIG_DEFAULTS, type ConfigDefaults } from "./config-defaults-schema.ts";
 
 // Re-export CONFIG_DIR for convenience (centralized in paths.ts)
-export { CONFIG_DIR } from './paths.ts';
+export { CONFIG_DIR } from "./paths.ts";
 
 // Re-export base types from core (single source of truth)
-export type {
-  Workspace,
-  McpAuthType,
-  AuthType,
-  OAuthCredentials,
-} from '@craft-agent/core/types';
+export type { Workspace, McpAuthType, AuthType, OAuthCredentials } from "@craft-agent/core/types";
 
 // Import for local use
-import type { Workspace, AuthType } from '@craft-agent/core/types';
+import type { Workspace, AuthType } from "@craft-agent/core/types";
 
 // Config stored in JSON file (credentials stored in encrypted file, not here)
 export interface StoredConfig {
   authType?: AuthType;
-  anthropicBaseUrl?: string;  // Custom Anthropic API base URL (for third-party compatible APIs)
-  customModel?: string;  // Custom model ID override (for third-party APIs like OpenRouter, Ollama)
+  provider?: "claude" | "copilot"; // Active AI provider (default: 'claude')
+  anthropicBaseUrl?: string; // Custom Anthropic API base URL (for third-party compatible APIs)
+  customModel?: string; // Custom model ID override (for third-party APIs like OpenRouter, Ollama)
   workspaces: Workspace[];
   activeWorkspaceId: string | null;
-  activeSessionId: string | null;  // Currently active session (primary scope)
+  activeSessionId: string | null; // Currently active session (primary scope)
   model?: string;
   // Notifications
-  notificationsEnabled?: boolean;  // Desktop notifications for task completion (default: true)
+  notificationsEnabled?: boolean; // Desktop notifications for task completion (default: true)
   // Appearance
-  colorTheme?: string;  // ID of selected preset theme (e.g., 'dracula', 'nord'). Default: 'default'
+  colorTheme?: string; // ID of selected preset theme (e.g., 'dracula', 'nord'). Default: 'default'
   // Auto-update
-  dismissedUpdateVersion?: string;  // Version that user dismissed (skip notifications for this version)
+  dismissedUpdateVersion?: string; // Version that user dismissed (skip notifications for this version)
 }
 
-const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
-const CONFIG_DEFAULTS_FILE = join(CONFIG_DIR, 'config-defaults.json');
+const CONFIG_FILE = join(CONFIG_DIR, "config.json");
+const CONFIG_DEFAULTS_FILE = join(CONFIG_DIR, "config-defaults.json");
 
 /**
  * Load config defaults from file, or use bundled defaults as fallback.
@@ -57,7 +48,7 @@ const CONFIG_DEFAULTS_FILE = join(CONFIG_DIR, 'config-defaults.json');
 export function loadConfigDefaults(): ConfigDefaults {
   try {
     if (existsSync(CONFIG_DEFAULTS_FILE)) {
-      const content = readFileSync(CONFIG_DEFAULTS_FILE, 'utf-8');
+      const content = readFileSync(CONFIG_DEFAULTS_FILE, "utf-8");
       return JSON.parse(content) as ConfigDefaults;
     }
   } catch {
@@ -77,8 +68,8 @@ export function ensureConfigDefaults(bundledDefaultsPath?: string): void {
   // Try to copy from bundled resources
   if (bundledDefaultsPath && existsSync(bundledDefaultsPath)) {
     try {
-      const content = readFileSync(bundledDefaultsPath, 'utf-8');
-      writeFileSync(CONFIG_DEFAULTS_FILE, content, 'utf-8');
+      const content = readFileSync(bundledDefaultsPath, "utf-8");
+      writeFileSync(CONFIG_DEFAULTS_FILE, content, "utf-8");
       return;
     } catch {
       // Fall through to write bundled defaults
@@ -86,11 +77,7 @@ export function ensureConfigDefaults(bundledDefaultsPath?: string): void {
   }
 
   // Fallback: write bundled defaults directly
-  writeFileSync(
-    CONFIG_DEFAULTS_FILE,
-    JSON.stringify(BUNDLED_CONFIG_DEFAULTS, null, 2),
-    'utf-8'
-  );
+  writeFileSync(CONFIG_DEFAULTS_FILE, JSON.stringify(BUNDLED_CONFIG_DEFAULTS, null, 2), "utf-8");
 }
 
 export function ensureConfigDir(bundledResourcesDir?: string): void {
@@ -101,9 +88,7 @@ export function ensureConfigDir(bundledResourcesDir?: string): void {
   initializeDocs();
 
   // Initialize config defaults
-  const bundledDefaultsPath = bundledResourcesDir
-    ? join(bundledResourcesDir, 'config-defaults.json')
-    : undefined;
+  const bundledDefaultsPath = bundledResourcesDir ? join(bundledResourcesDir, "config-defaults.json") : undefined;
   ensureConfigDefaults(bundledDefaultsPath);
 }
 
@@ -112,7 +97,7 @@ export function loadStoredConfig(): StoredConfig | null {
     if (!existsSync(CONFIG_FILE)) {
       return null;
     }
-    const content = readFileSync(CONFIG_FILE, 'utf-8');
+    const content = readFileSync(CONFIG_FILE, "utf-8");
     const config = JSON.parse(content) as StoredConfig;
 
     // Must have workspaces array
@@ -126,7 +111,7 @@ export function loadStoredConfig(): StoredConfig | null {
     }
 
     // Validate active workspace exists
-    const activeWorkspace = config.workspaces.find(w => w.id === config.activeWorkspaceId);
+    const activeWorkspace = config.workspaces.find((w) => w.id === config.activeWorkspaceId);
     if (!activeWorkspace) {
       // Default to first workspace
       config.activeWorkspaceId = config.workspaces[0]?.id || null;
@@ -161,21 +146,19 @@ export async function getClaudeOAuthToken(): Promise<string | null> {
   return manager.getClaudeOAuth();
 }
 
-
-
 export function saveConfig(config: StoredConfig): void {
   ensureConfigDir();
 
   // Convert paths to portable form (~ prefix) for cross-machine compatibility
   const storageConfig: StoredConfig = {
     ...config,
-    workspaces: config.workspaces.map(ws => ({
+    workspaces: config.workspaces.map((ws) => ({
       ...ws,
       rootPath: toPortablePath(ws.rootPath),
     })),
   };
 
-  writeFileSync(CONFIG_FILE, JSON.stringify(storageConfig, null, 2), 'utf-8');
+  writeFileSync(CONFIG_FILE, JSON.stringify(storageConfig, null, 2), "utf-8");
 }
 
 export async function updateApiKey(newApiKey: string): Promise<boolean> {
@@ -187,7 +170,7 @@ export async function updateApiKey(newApiKey: string): Promise<boolean> {
   await manager.setApiKey(newApiKey);
 
   // Update auth type in config (but not the key itself)
-  config.authType = 'api_key';
+  config.authType = "api_key";
   saveConfig(config);
   return true;
 }
@@ -205,6 +188,41 @@ export function setAuthType(authType: AuthType): void {
   const config = loadStoredConfig();
   if (!config) return;
   config.authType = authType;
+  saveConfig(config);
+}
+
+// ============================================
+// PROVIDER MANAGEMENT
+// ============================================
+
+import type { ProviderType } from "../agent/providers/types.ts";
+import { getDefaultModelForProvider, isModelForProvider } from "./models.ts";
+
+/**
+ * Get the active AI provider.
+ * Returns 'claude' as default for backwards compatibility.
+ */
+export function getProvider(): ProviderType {
+  const config = loadStoredConfig();
+  return config?.provider ?? "claude";
+}
+
+/**
+ * Set the active AI provider.
+ * Automatically switches to a compatible default model if the current model
+ * is not available on the new provider.
+ */
+export function setProvider(provider: ProviderType): void {
+  const config = loadStoredConfig();
+  if (!config) return;
+
+  config.provider = provider;
+
+  // Auto-switch to default model if current model isn't compatible with new provider
+  if (config.model && !isModelForProvider(config.model, provider)) {
+    config.model = getDefaultModelForProvider(provider);
+  }
+
   saveConfig(config);
 }
 
@@ -238,7 +256,6 @@ export function setModel(model: string): void {
   config.model = model;
   saveConfig(config);
 }
-
 
 /**
  * Get whether desktop notifications are enabled.
@@ -283,13 +300,13 @@ export async function clearAllConfig(): Promise<void> {
   }
 
   // Delete credentials file
-  const credentialsFile = join(CONFIG_DIR, 'credentials.enc');
+  const credentialsFile = join(CONFIG_DIR, "credentials.enc");
   if (existsSync(credentialsFile)) {
     rmSync(credentialsFile);
   }
 
   // Optionally: Delete workspace data (conversations)
-  const workspacesDir = join(CONFIG_DIR, 'workspaces');
+  const workspacesDir = join(CONFIG_DIR, "workspaces");
   if (existsSync(workspacesDir)) {
     rmSync(workspacesDir, { recursive: true });
   }
@@ -307,7 +324,9 @@ export function generateWorkspaceId(): string {
   // Generate random bytes and format as UUID-like string (8-4-4-4-12)
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
-  const hex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  const hex = Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }
 
@@ -324,15 +343,15 @@ export function getWorkspaces(): Workspace[] {
   const workspaces = config?.workspaces || [];
 
   // Resolve workspace names from folder config and local icons
-  return workspaces.map(w => {
+  return workspaces.map((w) => {
     // Read name from workspace folder config (single source of truth)
     const wsConfig = loadWorkspaceConfig(w.rootPath);
-    const name = wsConfig?.name || w.rootPath.split('/').pop() || 'Untitled';
+    const name = wsConfig?.name || w.rootPath.split("/").pop() || "Untitled";
 
     // If workspace has a stored iconUrl that's a remote URL, use it
     // Otherwise check for local icon file
     let iconUrl = w.iconUrl;
-    if (!iconUrl || (!iconUrl.startsWith('http://') && !iconUrl.startsWith('https://'))) {
+    if (!iconUrl || (!iconUrl.startsWith("http://") && !iconUrl.startsWith("https://"))) {
       const localIcon = findWorkspaceIcon(w.rootPath);
       if (localIcon) {
         // Convert absolute path to file:// URL for Electron renderer
@@ -355,7 +374,7 @@ export function getActiveWorkspace(): Workspace | null {
   if (!config || !config.activeWorkspaceId) {
     return config?.workspaces[0] || null;
   }
-  return config.workspaces.find(w => w.id === config.activeWorkspaceId) || config.workspaces[0] || null;
+  return config.workspaces.find((w) => w.id === config.activeWorkspaceId) || config.workspaces[0] || null;
 }
 
 /**
@@ -364,17 +383,14 @@ export function getActiveWorkspace(): Workspace | null {
  */
 export function getWorkspaceByNameOrId(nameOrId: string): Workspace | null {
   const workspaces = getWorkspaces();
-  return workspaces.find(w =>
-    w.id === nameOrId ||
-    w.name.toLowerCase() === nameOrId.toLowerCase()
-  ) || null;
+  return workspaces.find((w) => w.id === nameOrId || w.name.toLowerCase() === nameOrId.toLowerCase()) || null;
 }
 
 export function setActiveWorkspace(workspaceId: string): void {
   const config = loadStoredConfig();
   if (!config) return;
 
-  const workspace = config.workspaces.find(w => w.id === workspaceId);
+  const workspace = config.workspaces.find((w) => w.id === workspaceId);
   if (!workspace) return;
 
   config.activeWorkspaceId = workspaceId;
@@ -392,7 +408,7 @@ export function switchWorkspaceAtomic(workspaceId: string): { workspace: Workspa
   const config = loadStoredConfig();
   if (!config) return null;
 
-  const workspace = config.workspaces.find(w => w.id === workspaceId);
+  const workspace = config.workspaces.find((w) => w.id === workspaceId);
   if (!workspace) return null;
 
   // Get or create the latest session for this workspace
@@ -410,14 +426,14 @@ export function switchWorkspaceAtomic(workspaceId: string): { workspace: Workspa
  * Add a workspace to the global config.
  * @param workspace - Workspace data (must include rootPath)
  */
-export function addWorkspace(workspace: Omit<Workspace, 'id' | 'createdAt'>): Workspace {
+export function addWorkspace(workspace: Omit<Workspace, "id" | "createdAt">): Workspace {
   const config = loadStoredConfig();
   if (!config) {
-    throw new Error('No config found');
+    throw new Error("No config found");
   }
 
   // Check if workspace with same rootPath already exists
-  const existing = config.workspaces.find(w => w.rootPath === workspace.rootPath);
+  const existing = config.workspaces.find((w) => w.rootPath === workspace.rootPath);
   if (existing) {
     // Update existing workspace with new settings
     const updated: Workspace = {
@@ -464,7 +480,7 @@ export function syncWorkspaces(): void {
   if (!config) return;
 
   const discoveredPaths = discoverWorkspacesInDefaultLocation();
-  const trackedPaths = new Set(config.workspaces.map(w => w.rootPath));
+  const trackedPaths = new Set(config.workspaces.map((w) => w.rootPath));
 
   let added = false;
   for (const rootPath of discoveredPaths) {
@@ -498,7 +514,7 @@ export async function removeWorkspace(workspaceId: string): Promise<boolean> {
   const config = loadStoredConfig();
   if (!config) return false;
 
-  const index = config.workspaces.findIndex(w => w.id === workspaceId);
+  const index = config.workspaces.findIndex((w) => w.id === workspaceId);
   if (index === -1) return false;
 
   config.workspaces.splice(index, 1);
@@ -524,7 +540,7 @@ export async function removeWorkspace(workspaceId: string): Promise<boolean> {
 // Workspace Conversation Persistence
 // ============================================
 
-const WORKSPACES_DIR = join(CONFIG_DIR, 'workspaces');
+const WORKSPACES_DIR = join(CONFIG_DIR, "workspaces");
 
 function ensureWorkspaceDir(workspaceId: string): string {
   const dir = join(WORKSPACES_DIR, workspaceId);
@@ -534,9 +550,8 @@ function ensureWorkspaceDir(workspaceId: string): string {
   return dir;
 }
 
-
 // Re-export types from core for convenience
-export type { StoredAttachment, StoredMessage } from '@craft-agent/core/types';
+export type { StoredAttachment, StoredMessage } from "@craft-agent/core/types";
 
 export interface WorkspaceConversation {
   messages: StoredMessage[];
@@ -553,13 +568,9 @@ export interface WorkspaceConversation {
 }
 
 // Save workspace conversation (messages + token usage)
-export function saveWorkspaceConversation(
-  workspaceId: string,
-  messages: StoredMessage[],
-  tokenUsage: WorkspaceConversation['tokenUsage']
-): void {
+export function saveWorkspaceConversation(workspaceId: string, messages: StoredMessage[], tokenUsage: WorkspaceConversation["tokenUsage"]): void {
   const dir = ensureWorkspaceDir(workspaceId);
-  const filePath = join(dir, 'conversation.json');
+  const filePath = join(dir, "conversation.json");
 
   const conversation: WorkspaceConversation = {
     messages,
@@ -568,11 +579,11 @@ export function saveWorkspaceConversation(
   };
 
   try {
-    writeFileSync(filePath, JSON.stringify(conversation, null, 2), 'utf-8');
+    writeFileSync(filePath, JSON.stringify(conversation, null, 2), "utf-8");
   } catch (e) {
     // Handle cyclic structures or other serialization errors
     console.error(`[storage] [CYCLIC STRUCTURE] Failed to save workspace conversation:`, e);
-    console.error(`[storage] Message count: ${messages.length}, message types: ${messages.map(m => m.type).join(', ')}`);
+    console.error(`[storage] Message count: ${messages.length}, message types: ${messages.map((m) => m.type).join(", ")}`);
     // Try to save with sanitized messages
     try {
       const sanitizedMessages = messages.map((m, i) => {
@@ -581,8 +592,8 @@ export function saveWorkspaceConversation(
           try {
             JSON.stringify(m.toolInput);
           } catch (inputErr) {
-            console.error(`[storage] [CYCLIC STRUCTURE] in message ${i} toolInput (tool: ${m.toolName}), keys: ${Object.keys(m.toolInput).join(', ')}, error: ${inputErr}`);
-            safeToolInput = { error: '[non-serializable input]' };
+            console.error(`[storage] [CYCLIC STRUCTURE] in message ${i} toolInput (tool: ${m.toolName}), keys: ${Object.keys(m.toolInput).join(", ")}, error: ${inputErr}`);
+            safeToolInput = { error: "[non-serializable input]" };
           }
         }
         return { ...m, toolInput: safeToolInput };
@@ -592,7 +603,7 @@ export function saveWorkspaceConversation(
         tokenUsage,
         savedAt: Date.now(),
       };
-      writeFileSync(filePath, JSON.stringify(sanitizedConversation, null, 2), 'utf-8');
+      writeFileSync(filePath, JSON.stringify(sanitizedConversation, null, 2), "utf-8");
       console.error(`[storage] Saved sanitized workspace conversation successfully`);
     } catch (e2) {
       console.error(`[storage] Failed to save even sanitized workspace conversation:`, e2);
@@ -602,13 +613,13 @@ export function saveWorkspaceConversation(
 
 // Load workspace conversation
 export function loadWorkspaceConversation(workspaceId: string): WorkspaceConversation | null {
-  const filePath = join(WORKSPACES_DIR, workspaceId, 'conversation.json');
+  const filePath = join(WORKSPACES_DIR, workspaceId, "conversation.json");
 
   try {
     if (!existsSync(filePath)) {
       return null;
     }
-    const content = readFileSync(filePath, 'utf-8');
+    const content = readFileSync(filePath, "utf-8");
     return JSON.parse(content) as WorkspaceConversation;
   } catch {
     return null;
@@ -622,9 +633,9 @@ export function getWorkspaceDataPath(workspaceId: string): string {
 
 // Clear workspace conversation
 export function clearWorkspaceConversation(workspaceId: string): void {
-  const filePath = join(WORKSPACES_DIR, workspaceId, 'conversation.json');
+  const filePath = join(WORKSPACES_DIR, workspaceId, "conversation.json");
   if (existsSync(filePath)) {
-    writeFileSync(filePath, '{}', 'utf-8');
+    writeFileSync(filePath, "{}", "utf-8");
   }
 
   // Also clear any active plan (plans are session-scoped)
@@ -643,8 +654,8 @@ export function clearWorkspaceConversation(workspaceId: string): void {
  */
 export function saveWorkspacePlan(workspaceId: string, plan: Plan): void {
   const dir = ensureWorkspaceDir(workspaceId);
-  const filePath = join(dir, 'plan.json');
-  writeFileSync(filePath, JSON.stringify(plan, null, 2), 'utf-8');
+  const filePath = join(dir, "plan.json");
+  writeFileSync(filePath, JSON.stringify(plan, null, 2), "utf-8");
 }
 
 /**
@@ -652,13 +663,13 @@ export function saveWorkspacePlan(workspaceId: string, plan: Plan): void {
  * Returns null if no plan exists.
  */
 export function loadWorkspacePlan(workspaceId: string): Plan | null {
-  const filePath = join(WORKSPACES_DIR, workspaceId, 'plan.json');
+  const filePath = join(WORKSPACES_DIR, workspaceId, "plan.json");
 
   try {
     if (!existsSync(filePath)) {
       return null;
     }
-    const content = readFileSync(filePath, 'utf-8');
+    const content = readFileSync(filePath, "utf-8");
     return JSON.parse(content) as Plan;
   } catch {
     return null;
@@ -670,7 +681,7 @@ export function loadWorkspacePlan(workspaceId: string): Plan | null {
  * Called when user runs /clear or cancels a plan.
  */
 export function clearWorkspacePlan(workspaceId: string): void {
-  const filePath = join(WORKSPACES_DIR, workspaceId, 'plan.json');
+  const filePath = join(WORKSPACES_DIR, workspaceId, "plan.json");
   if (existsSync(filePath)) {
     rmSync(filePath);
   }
@@ -681,7 +692,7 @@ export function clearWorkspacePlan(workspaceId: string): void {
 // Persists input text per session across app restarts
 // ============================================
 
-const DRAFTS_FILE = join(CONFIG_DIR, 'drafts.json');
+const DRAFTS_FILE = join(CONFIG_DIR, "drafts.json");
 
 interface DraftsData {
   drafts: Record<string, string>;
@@ -696,7 +707,7 @@ function loadDraftsData(): DraftsData {
     if (!existsSync(DRAFTS_FILE)) {
       return { drafts: {}, updatedAt: 0 };
     }
-    const content = readFileSync(DRAFTS_FILE, 'utf-8');
+    const content = readFileSync(DRAFTS_FILE, "utf-8");
     return JSON.parse(content) as DraftsData;
   } catch {
     return { drafts: {}, updatedAt: 0 };
@@ -709,7 +720,7 @@ function loadDraftsData(): DraftsData {
 function saveDraftsData(data: DraftsData): void {
   ensureConfigDir();
   data.updatedAt = Date.now();
-  writeFileSync(DRAFTS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  writeFileSync(DRAFTS_FILE, JSON.stringify(data, null, 2), "utf-8");
 }
 
 /**
@@ -755,11 +766,11 @@ export function getAllSessionDrafts(): Record<string, string> {
 // Theme Storage (App-level only)
 // ============================================
 
-import type { ThemeOverrides, ThemeFile, PresetTheme } from './theme.ts';
-import { readdirSync } from 'fs';
+import type { ThemeOverrides, ThemeFile, PresetTheme } from "./theme.ts";
+import { readdirSync } from "fs";
 
-const APP_THEME_FILE = join(CONFIG_DIR, 'theme.json');
-const APP_THEMES_DIR = join(CONFIG_DIR, 'themes');
+const APP_THEME_FILE = join(CONFIG_DIR, "theme.json");
+const APP_THEMES_DIR = join(CONFIG_DIR, "themes");
 
 /**
  * Get the app-level themes directory.
@@ -777,7 +788,7 @@ export function loadAppTheme(): ThemeOverrides | null {
     if (!existsSync(APP_THEME_FILE)) {
       return null;
     }
-    const content = readFileSync(APP_THEME_FILE, 'utf-8');
+    const content = readFileSync(APP_THEME_FILE, "utf-8");
     return JSON.parse(content) as ThemeOverrides;
   } catch {
     return null;
@@ -789,9 +800,8 @@ export function loadAppTheme(): ThemeOverrides | null {
  */
 export function saveAppTheme(theme: ThemeOverrides): void {
   ensureConfigDir();
-  writeFileSync(APP_THEME_FILE, JSON.stringify(theme, null, 2), 'utf-8');
+  writeFileSync(APP_THEME_FILE, JSON.stringify(theme, null, 2), "utf-8");
 }
-
 
 // ============================================
 // Preset Themes (app-level)
@@ -818,13 +828,13 @@ export function ensurePresetThemes(bundledThemesDir?: string): void {
 
   // Copy each bundled theme if it doesn't exist in app themes dir
   try {
-    const bundledFiles = readdirSync(bundledThemesDir).filter(f => f.endsWith('.json'));
+    const bundledFiles = readdirSync(bundledThemesDir).filter((f) => f.endsWith(".json"));
     for (const file of bundledFiles) {
       const destPath = join(themesDir, file);
       if (!existsSync(destPath)) {
         const srcPath = join(bundledThemesDir, file);
-        const content = readFileSync(srcPath, 'utf-8');
-        writeFileSync(destPath, content, 'utf-8');
+        const content = readFileSync(srcPath, "utf-8");
+        writeFileSync(destPath, content, "utf-8");
       }
     }
   } catch {
@@ -848,12 +858,12 @@ export function loadPresetThemes(bundledThemesDir?: string): PresetTheme[] {
   const themes: PresetTheme[] = [];
 
   try {
-    const files = readdirSync(themesDir).filter(f => f.endsWith('.json'));
+    const files = readdirSync(themesDir).filter((f) => f.endsWith(".json"));
     for (const file of files) {
-      const id = file.replace('.json', '');
+      const id = file.replace(".json", "");
       const path = join(themesDir, file);
       try {
-        const content = readFileSync(path, 'utf-8');
+        const content = readFileSync(path, "utf-8");
         const theme = JSON.parse(content) as ThemeFile;
         // Resolve relative backgroundImage paths to file:// URLs
         const resolvedTheme = resolveThemeBackgroundImage(theme, path);
@@ -868,8 +878,8 @@ export function loadPresetThemes(bundledThemesDir?: string): PresetTheme[] {
 
   // Sort by name (default first, then alphabetically)
   return themes.sort((a, b) => {
-    if (a.id === 'default') return -1;
-    if (b.id === 'default') return 1;
+    if (a.id === "default") return -1;
+    if (b.id === "default") return 1;
     return (a.theme.name || a.id).localeCompare(b.theme.name || b.id);
   });
 }
@@ -878,15 +888,21 @@ export function loadPresetThemes(bundledThemesDir?: string): PresetTheme[] {
  * Get MIME type from file extension for data URL encoding.
  */
 function getMimeType(filePath: string): string {
-  const ext = filePath.toLowerCase().split('.').pop();
+  const ext = filePath.toLowerCase().split(".").pop();
   switch (ext) {
-    case 'png': return 'image/png';
-    case 'jpg':
-    case 'jpeg': return 'image/jpeg';
-    case 'gif': return 'image/gif';
-    case 'webp': return 'image/webp';
-    case 'svg': return 'image/svg+xml';
-    default: return 'application/octet-stream';
+    case "png":
+      return "image/png";
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "gif":
+      return "image/gif";
+    case "webp":
+      return "image/webp";
+    case "svg":
+      return "image/svg+xml";
+    default:
+      return "application/octet-stream";
   }
 }
 
@@ -922,7 +938,7 @@ function resolveThemeBackgroundImage(theme: ThemeFile, themePath: string): Theme
     }
 
     const imageBuffer = readFileSync(absoluteImagePath);
-    const base64 = imageBuffer.toString('base64');
+    const base64 = imageBuffer.toString("base64");
     const mimeType = getMimeType(absoluteImagePath);
     const dataUrl = `data:${mimeType};base64,${base64}`;
 
@@ -949,7 +965,7 @@ export function loadPresetTheme(id: string): PresetTheme | null {
   }
 
   try {
-    const content = readFileSync(path, 'utf-8');
+    const content = readFileSync(path, "utf-8");
     const theme = JSON.parse(content) as ThemeFile;
     // Resolve relative backgroundImage paths to file:// URLs
     const resolvedTheme = resolveThemeBackgroundImage(theme, path);
@@ -987,11 +1003,11 @@ export function resetPresetTheme(id: string, bundledThemesDir?: string): boolean
   }
 
   try {
-    const content = readFileSync(bundledPath, 'utf-8');
+    const content = readFileSync(bundledPath, "utf-8");
     if (!existsSync(themesDir)) {
       mkdirSync(themesDir, { recursive: true });
     }
-    writeFileSync(destPath, content, 'utf-8');
+    writeFileSync(destPath, content, "utf-8");
     return true;
   } catch {
     return false;

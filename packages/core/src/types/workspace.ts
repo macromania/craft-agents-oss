@@ -6,12 +6,12 @@
  * How MCP server should be authenticated (workspace-level)
  * Note: Different from SourceMcpAuthType which uses 'oauth' | 'bearer' | 'none' for individual sources
  */
-export type McpAuthType = 'workspace_oauth' | 'workspace_bearer' | 'public';
+export type McpAuthType = "workspace_oauth" | "workspace_bearer" | "public";
 
 export interface Workspace {
   id: string;
-  name: string;            // Read from workspace folder config (not stored in global config)
-  rootPath: string;        // Absolute path to workspace folder (e.g., ~/Projects/my-app/craft-agent)
+  name: string; // Read from workspace folder config (not stored in global config)
+  rootPath: string; // Absolute path to workspace folder (e.g., ~/Projects/my-app/craft-agent)
   createdAt: number;
   lastAccessedAt?: number; // For sorting recent workspaces
   iconUrl?: string;
@@ -19,7 +19,13 @@ export interface Workspace {
   mcpAuthType?: McpAuthType;
 }
 
-export type AuthType = 'api_key' | 'oauth_token';
+/**
+ * Authentication type for AI providers
+ * - api_key: Anthropic API key
+ * - oauth_token: Claude OAuth token (Max subscription)
+ * - copilot_cli: GitHub Copilot CLI authentication (uses GitHub's credential storage)
+ */
+export type AuthType = "api_key" | "oauth_token" | "copilot_cli";
 
 /**
  * OAuth credentials from a fresh authentication flow.
@@ -38,7 +44,6 @@ export interface StoredConfig {
   authType?: AuthType;
   workspaces: Workspace[];
   activeWorkspaceId: string | null;
-  activeSessionId: string | null;  // Currently active session (primary scope)
+  activeSessionId: string | null; // Currently active session (primary scope)
   model?: string;
 }
-
