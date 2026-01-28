@@ -3,28 +3,26 @@
  * Allows CraftAgent to use either Claude Agent SDK or Copilot SDK interchangeably.
  */
 
-import type { AgentEvent } from '@craft-agent/core/types';
-import type { FileAttachment } from '../../utils/files.ts';
-import type { createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk';
+import type { AgentEvent } from "@craft-agent/core/types";
+import type { FileAttachment } from "../../utils/files.ts";
+import type { createSdkMcpServer } from "@anthropic-ai/claude-agent-sdk";
 
 /**
  * Provider type identifier
  */
-export type ProviderType = 'claude' | 'copilot';
+export type ProviderType = "claude" | "copilot";
 
 /**
  * SDK-compatible MCP server configuration.
  * Supports HTTP/SSE (remote) and stdio (local subprocess) transports.
  */
-export type SdkMcpServerConfig =
-  | { type: 'http' | 'sse'; url: string; headers?: Record<string, string> }
-  | { type: 'stdio'; command: string; args?: string[]; env?: Record<string, string> };
+export type SdkMcpServerConfig = { type: "http" | "sse"; url: string; headers?: Record<string, string> } | { type: "stdio"; command: string; args?: string[]; env?: Record<string, string> };
 
 /**
  * System prompt configuration for providers
  */
 export interface SystemPromptConfig {
-  type: 'preset' | 'custom';
+  type: "preset" | "custom";
   preset?: string;
   append?: string;
   content?: string;
@@ -59,13 +57,13 @@ export interface ProviderQueryConfig {
   /** Workspace root path for plugin loading */
   workspaceRootPath?: string;
   /** Permission mode setting */
-  permissionMode?: 'default' | 'bypassPermissions';
+  permissionMode?: "default" | "bypassPermissions";
   /** Allow skipping permissions flag */
   allowDangerouslySkipPermissions?: boolean;
   /** Hooks for tool interception */
   hooks?: Record<string, unknown>;
   /** Tool preset or custom tools */
-  tools?: { type: 'preset'; preset: string } | { type: 'custom'; tools: unknown[] };
+  tools?: { type: "preset"; preset: string } | { type: "custom"; tools: unknown[] };
   /** Abort controller for cancellation */
   abortController?: AbortController;
 }
@@ -111,33 +109,30 @@ export interface ProviderQueryResult {
 export interface ProviderAdapter {
   /** Provider identifier */
   readonly name: ProviderType;
-  
+
   /**
    * Execute a query/message and return an event stream
    * This is the main interaction point - wraps SDK's query() or equivalent
    */
-  query(
-    message: ProviderMessage,
-    config: ProviderQueryConfig
-  ): Promise<ProviderQueryResult>;
-  
+  query(message: ProviderMessage, config: ProviderQueryConfig): Promise<ProviderQueryResult>;
+
   /**
    * Check if the provider is available (auth configured, CLI installed, etc.)
    */
   isAvailable(): Promise<boolean>;
-  
+
   /**
    * Get list of models available through this provider
    */
   getAvailableModels(): string[];
-  
+
   /**
    * Map provider-specific event to AgentEvent
    * Called by CraftAgent to normalize events
    * @returns AgentEvent or null if event should be skipped
    */
   mapEvent(event: unknown): AgentEvent | null;
-  
+
   /**
    * Provider-specific environment variables needed (set before query)
    */
