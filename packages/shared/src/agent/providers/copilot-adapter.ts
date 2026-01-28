@@ -278,6 +278,9 @@ export class CopilotAdapter implements ProviderAdapter {
 
     onProcess(proc);
 
+    // Close stdin immediately - we're using -p flag, not interactive mode
+    proc.stdin?.end();
+
     // Handle abort
     const abortHandler = () => {
       debug("[CopilotAdapter] Abort signal received");
@@ -305,8 +308,13 @@ export class CopilotAdapter implements ProviderAdapter {
         proc.on("error", reject);
       });
 
+      console.log("[CopilotAdapter] Starting stdout iteration");
+      debug("[CopilotAdapter] Starting stdout iteration");
+
       // Stream stdout data
       for await (const chunk of proc.stdout as AsyncIterable<string>) {
+        console.log(`[CopilotAdapter] Got stdout chunk: ${JSON.stringify(chunk)}`);
+        debug(`[CopilotAdapter] Got stdout chunk: ${JSON.stringify(chunk)}`);
         if (abortController.signal.aborted) {
           break;
         }
@@ -319,6 +327,8 @@ export class CopilotAdapter implements ProviderAdapter {
 
         for (const line of lines) {
           if (line.trim()) {
+            console.log(`[CopilotAdapter] Yielding text event: ${line.substring(0, 50)}...`);
+            debug(`[CopilotAdapter] Yielding text event: ${line.substring(0, 50)}...`);
             // Each line is text output from the model
             yield {
               type: "text",
@@ -327,6 +337,8 @@ export class CopilotAdapter implements ProviderAdapter {
           }
         }
       }
+      console.log("[CopilotAdapter] Stdout iteration complete");
+      debug("[CopilotAdapter] Stdout iteration complete");
 
       // Process any remaining buffer
       if (buffer.trim()) {

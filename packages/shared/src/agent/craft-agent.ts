@@ -2044,33 +2044,58 @@ export class CraftAgent {
       // Execute query via provider adapter
       const result = await this.providerAdapter.query({ content: prompt, attachments }, queryConfig);
 
+      console.log("[chatWithCopilot] Starting to iterate over events");
+      debug("[chatWithCopilot] Starting to iterate over events");
       // Process events from the provider
-      let receivedContent = false;
+      // Accumulate text_delta content to emit text_complete before complete event
+      let accumulatedText = "";
       for await (const rawEvent of result.events) {
+        console.log(`[chatWithCopilot] Got raw event: ${JSON.stringify(rawEvent)}`);
+        debug(`[chatWithCopilot] Got raw event: ${JSON.stringify(rawEvent)}`);
         // Map provider event to AgentEvent
         const event = this.providerAdapter.mapEvent(rawEvent);
 
         if (!event) {
           // Skip unmapped events
+          console.log("[chatWithCopilot] Event was null after mapping, skipping");
+          debug("[chatWithCopilot] Event was null after mapping, skipping");
           continue;
         }
 
-        // Track if we received any content
-        if (event.type === "text_delta" || event.type === "text_complete") {
-          receivedContent = true;
+        console.log(`[chatWithCopilot] Mapped event type: ${event.type}`);
+        debug(`[chatWithCopilot] Mapped event type: ${event.type}`);
+
+        // Accumulate text from text_delta events
+        if (event.type === "text_delta") {
+          accumulatedText += event.text;
+          yield event;
+          continue;
         }
 
-        // Yield the mapped event
-        yield event;
-
-        // Check for completion
+        // When we hit complete, emit text_complete with accumulated text first
         if (event.type === "complete") {
+          if (accumulatedText.length > 0) {
+            console.log(`[chatWithCopilot] Emitting text_complete with ${accumulatedText.length} chars`);
+            debug(`[chatWithCopilot] Emitting text_complete with ${accumulatedText.length} chars`);
+            yield { type: "text_complete", text: accumulatedText, isIntermediate: false };
+          }
+          yield event;
           break;
         }
+
+        // Yield other events (tool_start, tool_result, error, etc.)
+        yield event;
       }
 
-      // Ensure we emit complete if not already done
-      if (!receivedContent) {
+      // Handle case where loop exits without complete event
+      if (accumulatedText.length > 0) {
+        console.log(`[chatWithCopilot] Loop ended - emitting text_complete with ${accumulatedText.length} chars`);
+        debug(`[chatWithCopilot] Loop ended - emitting text_complete with ${accumulatedText.length} chars`);
+        yield { type: "text_complete", text: accumulatedText, isIntermediate: false };
+      }
+
+      // If no content at all, emit info message
+      if (accumulatedText.length === 0) {
         yield { type: "info", message: "No response received from Copilot" };
       }
     } catch (error) {
