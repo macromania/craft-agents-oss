@@ -4,6 +4,21 @@
 
 Integrate the [GitHub Copilot SDK](https://github.com/github/copilot-sdk) (`@github/copilot-sdk`) as an alternative AI provider alongside the existing Claude Agent SDK. This enables users to leverage their existing GitHub Copilot subscription instead of requiring a separate Anthropic API key or Claude subscription.
 
+## Development Guidelines
+
+Per [CONTRIBUTING.md](CONTRIBUTING.md):
+
+- **Branch**: `feature/copilot-integration`
+- **Type Check**: Run `bun run typecheck:all` before each commit
+- **Key Directories**:
+  - Agent Logic: `packages/shared/src/agent/`
+  - Authentication: `packages/shared/src/auth/`
+  - MCP Integration: `packages/shared/src/mcp/`
+  - Types: `packages/core/src/types/`
+  - Electron App: `apps/electron/`
+
+---
+
 ## Background
 
 ### Current Architecture
@@ -270,50 +285,72 @@ const API_SETUP_OPTIONS: ApiSetupOption[] = [
 
 ### Task 3.2: Create Copilot Setup Step
 
-**File:** `apps/electron/src/renderer/components/onboarding/CopilotSetupStep.tsx`
+**File:** `packages/ui/src/components/CopilotSetupStep.tsx`
 
-New component for Copilot authentication:
+New reusable component for Copilot authentication status:
 
 ```typescript
-export function CopilotSetupStep({ onContinue, onBack }: CopilotSetupStepProps) {
-  const [status, setStatus] = useState<'checking' | 'not_installed' | 'not_authenticated' | 'ready'>('checking');
-  
-  // Check if Copilot CLI is installed and authenticated
-  useEffect(() => {
-    window.electronAPI.checkCopilotCli().then(result => {
-      if (!result.installed) setStatus('not_installed');
-      else if (!result.authenticated) setStatus('not_authenticated');
-      else setStatus('ready');
-    });
-  }, []);
-  
+export type CopilotStatus = 'checking' | 'not_installed' | 'not_authenticated' | 'ready';
+
+export interface CopilotSetupStepProps {
+  status: CopilotStatus;
+  onInstallClick: () => void;
+  onAuthenticateClick: () => void;
+  onContinue: () => void;
+  onBack: () => void;
+}
+
+export function CopilotSetupStep({
+  status,
+  onInstallClick,
+  onAuthenticateClick,
+  onContinue,
+  onBack,
+}: CopilotSetupStepProps) {
   return (
-    <StepFormLayout
-      title="Connect GitHub Copilot"
-      description="Use your existing Copilot subscription to power AI agents."
-    >
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold">Connect GitHub Copilot</h2>
+        <p className="text-muted-foreground">Use your existing Copilot subscription to power AI agents.</p>
+      </div>
+      
+      {status === 'checking' && (
+        <div className="text-muted-foreground">Checking Copilot CLI status...</div>
+      )}
+      
       {status === 'not_installed' && (
         <Alert>
           <p>GitHub Copilot CLI is not installed.</p>
-          <Button onClick={() => shell.openExternal('https://docs.github.com/en/copilot/...')}>
-            Install Copilot CLI
-          </Button>
+          <Button onClick={onInstallClick}>Install Copilot CLI</Button>
         </Alert>
       )}
+      
       {status === 'not_authenticated' && (
         <Alert>
           <p>Please authenticate with GitHub Copilot CLI.</p>
-          <Button onClick={() => window.electronAPI.runCopilotAuth()}>
-            Run `gh auth login`
-          </Button>
+          <Button onClick={onAuthenticateClick}>Authenticate</Button>
         </Alert>
       )}
+      
       {status === 'ready' && (
         <div className="text-green-500">✓ Copilot CLI is ready</div>
       )}
-    </StepFormLayout>
+      
+      <div className="flex gap-2">
+        <Button variant="outline" onClick={onBack}>Back</Button>
+        <Button onClick={onContinue} disabled={status !== 'ready'}>Continue</Button>
+      </div>
+    </div>
   );
 }
+```
+
+**File:** `packages/ui/src/index.ts`
+
+Export the new component:
+
+```typescript
+export { CopilotSetupStep, type CopilotSetupStepProps, type CopilotStatus } from './components/CopilotSetupStep';
 ```
 
 ### Task 3.3: Update Settings Page
@@ -433,6 +470,14 @@ export class CraftAgent {
 ---
 
 ## Phase 5: Testing & Validation
+
+### Task 5.0: Type Checking
+
+Before any PR submission, ensure all types pass:
+
+```bash
+bun run typecheck:all
+```
 
 ### Task 5.1: Add Copilot Provider Tests
 
