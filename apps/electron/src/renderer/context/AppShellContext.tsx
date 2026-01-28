@@ -6,148 +6,124 @@
  * access to the current session, workspace, and callback functions.
  */
 
-import * as React from 'react'
-import { createContext, useContext, useCallback } from 'react'
-import { useAtomValue } from 'jotai'
-import type { RichTextInputHandle } from '@/components/ui/rich-text-input'
-import type {
-  Session,
-  Workspace,
-  FileAttachment,
-  PermissionRequest,
-  CredentialRequest,
-  CredentialResponse,
-  PermissionMode,
-  TodoState,
-  LoadedSource,
-  LoadedSkill,
-  NewChatActionParams,
-} from '../../shared/types'
-import type { TodoState as TodoStateConfig } from '@/config/todo-states'
-import type { SessionOptions, SessionOptionUpdates } from '../hooks/useSessionOptions'
-import { defaultSessionOptions } from '../hooks/useSessionOptions'
-import { sessionAtomFamily } from '../atoms/sessions'
+import * as React from "react";
+import { createContext, useContext, useCallback } from "react";
+import { useAtomValue } from "jotai";
+import type { RichTextInputHandle } from "@/components/ui/rich-text-input";
+import type { Session, Workspace, FileAttachment, PermissionRequest, CredentialRequest, CredentialResponse, PermissionMode, TodoState, LoadedSource, LoadedSkill, NewChatActionParams } from "../../shared/types";
+import type { TodoState as TodoStateConfig } from "@/config/todo-states";
+import type { SessionOptions, SessionOptionUpdates } from "../hooks/useSessionOptions";
+import { defaultSessionOptions } from "../hooks/useSessionOptions";
+import { sessionAtomFamily } from "../atoms/sessions";
+import type { ProviderType } from "@craft-agent/shared/agent/providers/types";
 
 export interface AppShellContextType {
   // Data
   // NOTE: sessions is NOT included here - use sessionMetaMapAtom for listing
   // and useSession(id) hook for individual sessions. This prevents closures
   // from retaining the full messages array and causing memory leaks.
-  workspaces: Workspace[]
-  activeWorkspaceId: string | null
-  currentModel: string
+  workspaces: Workspace[];
+  activeWorkspaceId: string | null;
+  currentModel: string;
   /** When set, a custom model overrides the Anthropic model selector (e.g. OpenRouter) */
-  customModel: string | null
-  pendingPermissions: Map<string, PermissionRequest[]>
-  pendingCredentials: Map<string, CredentialRequest[]>
+  customModel: string | null;
+  /** Current AI provider ('claude' or 'copilot') - determines available models */
+  provider: ProviderType;
+  pendingPermissions: Map<string, PermissionRequest[]>;
+  pendingCredentials: Map<string, CredentialRequest[]>;
   /** Get draft input text for a session - reads from ref without triggering re-renders */
-  getDraft: (sessionId: string) => string
+  getDraft: (sessionId: string) => string;
   /** All enabled sources for this workspace - provided by AppShell component */
-  enabledSources?: LoadedSource[]
+  enabledSources?: LoadedSource[];
   /** All skills for this workspace - provided by AppShell component (for @mentions) */
-  skills?: LoadedSkill[]
+  skills?: LoadedSkill[];
   /** All label configs (tree) for label menu and badge display */
-  labels?: import('@craft-agent/shared/labels').LabelConfig[]
+  labels?: import("@craft-agent/shared/labels").LabelConfig[];
   /** Callback when session labels change */
-  onSessionLabelsChange?: (sessionId: string, labels: string[]) => void
+  onSessionLabelsChange?: (sessionId: string, labels: string[]) => void;
   /** Enabled permission modes for Shift+Tab cycling */
-  enabledModes?: PermissionMode[]
+  enabledModes?: PermissionMode[];
   /** Dynamic todo states from workspace config (provided by AppShell, defaults to empty) */
-  todoStates?: TodoStateConfig[]
+  todoStates?: TodoStateConfig[];
 
   // Unified session options (replaces ultrathinkSessions and sessionModes)
   /** All session-scoped options in one map. Use useSessionOptionsFor() hook for easy access. */
-  sessionOptions: Map<string, SessionOptions>
+  sessionOptions: Map<string, SessionOptions>;
 
   // Session callbacks
-  onCreateSession: (workspaceId: string) => Promise<Session>
-  onSendMessage: (sessionId: string, message: string, attachments?: FileAttachment[], skillSlugs?: string[]) => void
-  onRenameSession: (sessionId: string, name: string) => void
-  onFlagSession: (sessionId: string) => void
-  onUnflagSession: (sessionId: string) => void
-  onMarkSessionRead: (sessionId: string) => void
-  onMarkSessionUnread: (sessionId: string) => void
+  onCreateSession: (workspaceId: string) => Promise<Session>;
+  onSendMessage: (sessionId: string, message: string, attachments?: FileAttachment[], skillSlugs?: string[]) => void;
+  onRenameSession: (sessionId: string, name: string) => void;
+  onFlagSession: (sessionId: string) => void;
+  onUnflagSession: (sessionId: string) => void;
+  onMarkSessionRead: (sessionId: string) => void;
+  onMarkSessionUnread: (sessionId: string) => void;
   /** Track which session user is viewing (for unread state machine) */
-  onSetActiveViewingSession: (sessionId: string) => void
-  onTodoStateChange: (sessionId: string, state: TodoState) => void
-  onDeleteSession: (sessionId: string, skipConfirmation?: boolean) => Promise<boolean>
+  onSetActiveViewingSession: (sessionId: string) => void;
+  onTodoStateChange: (sessionId: string, state: TodoState) => void;
+  onDeleteSession: (sessionId: string, skipConfirmation?: boolean) => Promise<boolean>;
 
   // Permission handling
-  onRespondToPermission?: (
-    sessionId: string,
-    requestId: string,
-    allowed: boolean,
-    alwaysAllow: boolean
-  ) => void
+  onRespondToPermission?: (sessionId: string, requestId: string, allowed: boolean, alwaysAllow: boolean) => void;
 
   // Credential handling
-  onRespondToCredential?: (
-    sessionId: string,
-    requestId: string,
-    response: CredentialResponse
-  ) => void
+  onRespondToCredential?: (sessionId: string, requestId: string, response: CredentialResponse) => void;
 
   // File/URL handlers - these can open in tabs or external apps
-  onOpenFile: (path: string) => void
-  onOpenUrl: (url: string) => void
+  onOpenFile: (path: string) => void;
+  onOpenUrl: (url: string) => void;
 
   // Model
-  onModelChange: (model: string) => void
+  onModelChange: (model: string) => void;
   /** Re-fetch custom model from billing config (call after API connection changes) */
-  refreshCustomModel: () => Promise<void>
+  refreshCustomModel: () => Promise<void>;
 
   // Workspace
-  onSelectWorkspace: (id: string, openInNewWindow?: boolean) => void
-  onRefreshWorkspaces?: () => void
+  onSelectWorkspace: (id: string, openInNewWindow?: boolean) => void;
+  onRefreshWorkspaces?: () => void;
 
   // App actions
-  onOpenSettings: () => void
-  onOpenKeyboardShortcuts: () => void
-  onOpenStoredUserPreferences: () => void
-  onReset: () => void
+  onOpenSettings: () => void;
+  onOpenKeyboardShortcuts: () => void;
+  onOpenStoredUserPreferences: () => void;
+  onReset: () => void;
 
   // Unified session options callback (replaces onUltrathinkChange, onSkipPermissionsChange, onModeChange)
-  onSessionOptionsChange: (sessionId: string, updates: SessionOptionUpdates) => void
+  onSessionOptionsChange: (sessionId: string, updates: SessionOptionUpdates) => void;
 
   // Input draft callback
-  onInputChange: (sessionId: string, value: string) => void
+  onInputChange: (sessionId: string, value: string) => void;
 
   // Source selection callback (per-session) - provided by AppShell component
-  onSessionSourcesChange?: (sessionId: string, sourceSlugs: string[]) => void
+  onSessionSourcesChange?: (sessionId: string, sourceSlugs: string[]) => void;
 
   // Chat input ref (for focusing)
-  textareaRef?: React.RefObject<RichTextInputHandle>
+  textareaRef?: React.RefObject<RichTextInputHandle>;
 
   // Open a new chat with optional agent, name, and pre-filled input
-  openNewChat?: (params?: NewChatActionParams) => Promise<void>
+  openNewChat?: (params?: NewChatActionParams) => Promise<void>;
 
   // Right sidebar button (for page headers)
-  rightSidebarButton?: React.ReactNode
+  rightSidebarButton?: React.ReactNode;
 }
 
-const AppShellContext = createContext<AppShellContextType | null>(null)
+const AppShellContext = createContext<AppShellContextType | null>(null);
 
-export function AppShellProvider({
-  children,
-  value,
-}: {
-  children: React.ReactNode
-  value: AppShellContextType
-}) {
-  return <AppShellContext.Provider value={value}>{children}</AppShellContext.Provider>
+export function AppShellProvider({ children, value }: { children: React.ReactNode; value: AppShellContextType }) {
+  return <AppShellContext.Provider value={value}>{children}</AppShellContext.Provider>;
 }
 
 /** Returns context or null if outside provider (safe for optional consumers like playground) */
 export function useOptionalAppShellContext(): AppShellContextType | null {
-  return useContext(AppShellContext)
+  return useContext(AppShellContext);
 }
 
 export function useAppShellContext(): AppShellContextType {
-  const context = useContext(AppShellContext)
+  const context = useContext(AppShellContext);
   if (!context) {
-    throw new Error('useAppShellContext must be used within an AppShellProvider')
+    throw new Error("useAppShellContext must be used within an AppShellProvider");
   }
-  return context
+  return context;
 }
 
 /**
@@ -157,32 +133,32 @@ export function useAppShellContext(): AppShellContextType {
  */
 export function useSession(sessionId: string): Session | null {
   // Use per-session atom for isolated updates
-  return useAtomValue(sessionAtomFamily(sessionId))
+  return useAtomValue(sessionAtomFamily(sessionId));
 }
 
 /**
  * Get the active workspace
  */
 export function useActiveWorkspace(): Workspace | null {
-  const { workspaces, activeWorkspaceId } = useAppShellContext()
-  if (!activeWorkspaceId) return null
-  return workspaces.find((w) => w.id === activeWorkspaceId) || null
+  const { workspaces, activeWorkspaceId } = useAppShellContext();
+  if (!activeWorkspaceId) return null;
+  return workspaces.find((w) => w.id === activeWorkspaceId) || null;
 }
 
 /**
  * Get pending permission for a session (first in queue)
  */
 export function usePendingPermission(sessionId: string): PermissionRequest | undefined {
-  const { pendingPermissions } = useAppShellContext()
-  return pendingPermissions.get(sessionId)?.[0]
+  const { pendingPermissions } = useAppShellContext();
+  return pendingPermissions.get(sessionId)?.[0];
 }
 
 /**
  * Get pending credential request for a session (first in queue)
  */
 export function usePendingCredential(sessionId: string): CredentialRequest | undefined {
-  const { pendingCredentials } = useAppShellContext()
-  return pendingCredentials.get(sessionId)?.[0]
+  const { pendingCredentials } = useAppShellContext();
+  return pendingCredentials.get(sessionId)?.[0];
 }
 
 /**
@@ -195,39 +171,45 @@ export function usePendingCredential(sessionId: string): CredentialRequest | und
  *   setPermissionMode('safe')
  */
 export function useSessionOptionsFor(sessionId: string): {
-  options: SessionOptions
-  setOption: <K extends keyof SessionOptions>(key: K, value: SessionOptions[K]) => void
-  setOptions: (updates: SessionOptionUpdates) => void
-  toggleUltrathink: () => void
-  setPermissionMode: (mode: PermissionMode) => void
-  isSafeModeActive: () => boolean
+  options: SessionOptions;
+  setOption: <K extends keyof SessionOptions>(key: K, value: SessionOptions[K]) => void;
+  setOptions: (updates: SessionOptionUpdates) => void;
+  toggleUltrathink: () => void;
+  setPermissionMode: (mode: PermissionMode) => void;
+  isSafeModeActive: () => boolean;
 } {
-  const { sessionOptions, onSessionOptionsChange } = useAppShellContext()
+  const { sessionOptions, onSessionOptionsChange } = useAppShellContext();
 
-  const options = sessionOptions.get(sessionId) ?? defaultSessionOptions
+  const options = sessionOptions.get(sessionId) ?? defaultSessionOptions;
 
-  const setOption = useCallback(<K extends keyof SessionOptions>(
-    key: K,
-    value: SessionOptions[K]
-  ) => {
-    onSessionOptionsChange(sessionId, { [key]: value })
-  }, [sessionId, onSessionOptionsChange])
+  const setOption = useCallback(
+    <K extends keyof SessionOptions>(key: K, value: SessionOptions[K]) => {
+      onSessionOptionsChange(sessionId, { [key]: value });
+    },
+    [sessionId, onSessionOptionsChange]
+  );
 
-  const setOptions = useCallback((updates: SessionOptionUpdates) => {
-    onSessionOptionsChange(sessionId, updates)
-  }, [sessionId, onSessionOptionsChange])
+  const setOptions = useCallback(
+    (updates: SessionOptionUpdates) => {
+      onSessionOptionsChange(sessionId, updates);
+    },
+    [sessionId, onSessionOptionsChange]
+  );
 
   const toggleUltrathink = useCallback(() => {
-    setOption('ultrathinkEnabled', !options.ultrathinkEnabled)
-  }, [options.ultrathinkEnabled, setOption])
+    setOption("ultrathinkEnabled", !options.ultrathinkEnabled);
+  }, [options.ultrathinkEnabled, setOption]);
 
-  const setPermissionMode = useCallback((mode: PermissionMode) => {
-    setOption('permissionMode', mode)
-  }, [setOption])
+  const setPermissionMode = useCallback(
+    (mode: PermissionMode) => {
+      setOption("permissionMode", mode);
+    },
+    [setOption]
+  );
 
   const isSafeModeActive = useCallback(() => {
-    return options.permissionMode === 'safe'
-  }, [options.permissionMode])
+    return options.permissionMode === "safe";
+  }, [options.permissionMode]);
 
   return {
     options,
@@ -236,5 +218,5 @@ export function useSessionOptionsFor(sessionId: string): {
     toggleUltrathink,
     setPermissionMode,
     isSafeModeActive,
-  }
+  };
 }

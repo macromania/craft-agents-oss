@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useTheme } from "@/hooks/useTheme";
+import { useProvider } from "@/hooks/useProvider";
 import type { ThemeOverrides } from "@config/theme";
 import { useSetAtom, useStore, useAtomValue } from "jotai";
 import type { Session, Workspace, SessionEvent, Message, FileAttachment, StoredAttachment, PermissionRequest, CredentialRequest, CredentialResponse, SetupNeeds, TodoState, NewChatActionParams, ContentBadge } from "../shared/types";
@@ -158,6 +159,10 @@ export default function App() {
   // Custom model override from API connection settings (OpenRouter, Ollama, etc.)
   // When set, the Anthropic model selector is hidden and this model is shown instead.
   const [customModel, setCustomModel] = useState<string | null>(null);
+
+  // AI provider (claude or copilot) - determines available models
+  const { provider } = useProvider();
+
   const [menuNewChatTrigger, setMenuNewChatTrigger] = useState(0);
   // Permission requests per session (queue to handle multiple concurrent requests)
   const [pendingPermissions, setPendingPermissions] = useState<Map<string, PermissionRequest[]>>(new Map());
@@ -1157,6 +1162,7 @@ export default function App() {
       activeWorkspaceId: windowWorkspaceId,
       currentModel,
       customModel,
+      provider,
       pendingPermissions,
       pendingCredentials,
       getDraft,
@@ -1200,6 +1206,7 @@ export default function App() {
       windowWorkspaceId,
       currentModel,
       customModel,
+      provider,
       pendingPermissions,
       pendingCredentials,
       getDraft,

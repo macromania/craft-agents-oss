@@ -40,6 +40,59 @@ interface CopilotStreamEvent {
 }
 
 /**
+ * Map internal model IDs to Copilot CLI model names.
+ * The Copilot CLI uses simplified model names (e.g., "claude-opus-4.5")
+ * while the app may use full version IDs (e.g., "claude-opus-4-5-20251101").
+ */
+const MODEL_ID_TO_COPILOT: Record<string, string> = {
+  // Claude models - map dated versions to simple names
+  "claude-opus-4-5-20251101": "claude-opus-4.5",
+  "claude-sonnet-4-5-20251101": "claude-sonnet-4.5",
+  "claude-haiku-4-5-20251101": "claude-haiku-4.5",
+  "claude-sonnet-4-20250514": "claude-sonnet-4",
+  // Already correct format (passthrough)
+  "claude-opus-4.5": "claude-opus-4.5",
+  "claude-sonnet-4.5": "claude-sonnet-4.5",
+  "claude-haiku-4.5": "claude-haiku-4.5",
+  "claude-sonnet-4": "claude-sonnet-4",
+  // GPT models
+  "gpt-5": "gpt-5",
+  "gpt-5.2": "gpt-5.2",
+  "gpt-5.1": "gpt-5.1",
+  "gpt-5-mini": "gpt-5-mini",
+  "gpt-4.1": "gpt-4.1",
+  "gpt-5.2-codex": "gpt-5.2-codex",
+  "gpt-5.1-codex": "gpt-5.1-codex",
+  "gpt-5.1-codex-max": "gpt-5.1-codex-max",
+  "gpt-5.1-codex-mini": "gpt-5.1-codex-mini",
+  // Gemini models
+  "gemini-3-pro-preview": "gemini-3-pro-preview",
+};
+
+/**
+ * Convert an internal model ID to the Copilot CLI format.
+ * Falls back to extracting a simplified name if not in the mapping.
+ */
+function toCopilotModelId(modelId: string): string {
+  // Check direct mapping first
+  if (MODEL_ID_TO_COPILOT[modelId]) {
+    return MODEL_ID_TO_COPILOT[modelId];
+  }
+
+  // Try to extract a simplified model name from dated format
+  // e.g., "claude-opus-4-5-20251101" -> "claude-opus-4.5"
+  const claudeMatch = modelId.match(/^(claude-(?:opus|sonnet|haiku))-(\d+)-(\d+)-\d+$/);
+  if (claudeMatch) {
+    const [, prefix, major, minor] = claudeMatch;
+    return `${prefix}-${major}.${minor}`;
+  }
+
+  // Return as-is and let the CLI validate
+  debug(`[CopilotAdapter] Unknown model ID format: ${modelId}, passing through`);
+  return modelId;
+}
+
+/**
  * Copilot CLI adapter implementing the ProviderAdapter interface.
  *
  * Uses the GitHub Copilot CLI in non-interactive mode (`-p` flag) to execute
@@ -160,8 +213,9 @@ export class CopilotAdapter implements ProviderAdapter {
     // Prompt (the user message)
     args.push("-p", message.content);
 
-    // Model selection
-    args.push("--model", config.model);
+    // Model selection - convert to Copilot CLI format
+    const copilotModel = toCopilotModelId(config.model);
+    args.push("--model", copilotModel);
 
     // Enable streaming
     args.push("--stream", "on");
