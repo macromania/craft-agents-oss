@@ -804,26 +804,72 @@ export function registerIpcHandlers(sessionManager: SessionManager, windowManage
   // 1. copilot --version to verify CLI is installed
   // 2. gh auth status to verify GitHub authentication (required by copilot)
   ipcMain.handle(IPC_CHANNELS.CHECK_COPILOT_STATUS, async () => {
+    ipcLog.info("[CHECK_COPILOT_STATUS] Starting copilot status check...");
     try {
-      // Check if Copilot CLI is installed
-      try {
-        execSync("copilot --version", { stdio: "pipe" });
-      } catch {
-        return { installed: false, authenticated: false };
+      // Find copilot CLI - it may be installed in VS Code's global storage
+      // or available in PATH
+      const copilotPaths = [
+        // VS Code Copilot Chat extension installs CLI here
+        join(homedir(), "Library", "Application Support", "Code", "User", "globalStorage", "github.copilot-chat", "copilotCli", "copilot"),
+        // VS Code Insiders
+        join(homedir(), "Library", "Application Support", "Code - Insiders", "User", "globalStorage", "github.copilot-chat", "copilotCli", "copilot"),
+        // Cursor
+        join(homedir(), "Library", "Application Support", "Cursor", "User", "globalStorage", "github.copilot-chat", "copilotCli", "copilot"),
+        // Windows paths
+        join(homedir(), "AppData", "Roaming", "Code", "User", "globalStorage", "github.copilot-chat", "copilotCli", "copilot.exe"),
+        join(homedir(), "AppData", "Roaming", "Code - Insiders", "User", "globalStorage", "github.copilot-chat", "copilotCli", "copilot.exe"),
+        // Linux paths
+        join(homedir(), ".config", "Code", "User", "globalStorage", "github.copilot-chat", "copilotCli", "copilot"),
+        join(homedir(), ".config", "Code - Insiders", "User", "globalStorage", "github.copilot-chat", "copilotCli", "copilot"),
+      ];
+
+      let copilotPath: string | null = null;
+
+      // First check known VS Code paths
+      for (const path of copilotPaths) {
+        if (existsSync(path)) {
+          copilotPath = path;
+          ipcLog.info(`[CHECK_COPILOT_STATUS] Found copilot CLI at: ${path}`);
+          break;
+        }
+      }
+
+      // If not found in VS Code paths, try PATH
+      if (!copilotPath) {
+        try {
+          execSync("copilot --version", { stdio: "pipe", timeout: 10000 });
+          copilotPath = "copilot"; // Use PATH
+          ipcLog.info("[CHECK_COPILOT_STATUS] Found copilot CLI in PATH");
+        } catch (e) {
+          ipcLog.info("[CHECK_COPILOT_STATUS] Copilot CLI not found in PATH:", e);
+          return { installed: false, authenticated: false };
+        }
+      } else {
+        // Verify the found path works
+        try {
+          execSync(`"${copilotPath}" --version`, { stdio: "pipe", timeout: 10000 });
+        } catch {
+          ipcLog.warn(`[CHECK_COPILOT_STATUS] Found copilot at ${copilotPath} but failed to run`);
+          return { installed: false, authenticated: false };
+        }
       }
 
       // Check if user is authenticated to GitHub via gh CLI
       // (copilot CLI relies on gh for authentication)
       try {
-        const authOutput = execSync("gh auth status", { stdio: "pipe", encoding: "utf-8" });
+        ipcLog.info("[CHECK_COPILOT_STATUS] Checking gh auth status...");
+        const authOutput = execSync("gh auth status", { stdio: "pipe", encoding: "utf-8", timeout: 10000 });
         // gh auth status outputs "Logged in to github.com" when authenticated
         const isAuthenticated = authOutput.toLowerCase().includes("logged in");
-        return { installed: true, authenticated: isAuthenticated };
-      } catch {
+        ipcLog.info(`[CHECK_COPILOT_STATUS] gh auth status: authenticated=${isAuthenticated}`);
+        return { installed: true, authenticated: isAuthenticated, copilotPath };
+      } catch (e) {
         // gh auth status exits with non-zero if not authenticated
-        return { installed: true, authenticated: false };
+        ipcLog.info("[CHECK_COPILOT_STATUS] gh auth status: not authenticated or failed:", e);
+        return { installed: true, authenticated: false, copilotPath };
       }
     } catch (error) {
+      ipcLog.error("[CHECK_COPILOT_STATUS] Error:", error);
       return {
         installed: false,
         authenticated: false,

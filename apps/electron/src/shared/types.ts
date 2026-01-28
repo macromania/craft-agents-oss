@@ -227,6 +227,8 @@ export interface CopilotStatus {
   authenticated: boolean;
   /** Error message if status check failed */
   error?: string;
+  /** Path to the copilot CLI executable, if found */
+  copilotPath?: string;
 }
 
 /**
